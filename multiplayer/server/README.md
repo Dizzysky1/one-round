@@ -15,8 +15,12 @@ Files:
 
 ## Deploy
 
-Requires a Cloudflare account (free tier is fine for KV; Durable Objects
-need the Workers paid plan) and `wrangler` (no install needed with npx):
+Requires a Cloudflare account and `wrangler` (no install needed with npx).
+**The Workers Free plan is enough** — KV is on the free tier, and the `v1`
+migration below creates a *SQLite-backed* Durable Object
+(`new_sqlite_classes`), which Cloudflare made available on the free plan in
+April 2025. (Free-plan DO storage caps: 5 GB per account, 1 GB per object —
+a duel room holds a few KB and is wiped after 15 idle minutes.)
 
 ```sh
 cd multiplayer/server
@@ -34,9 +38,16 @@ npx wrangler deploy
 npx wrangler dev
 ```
 
-Then point the client at the deployed URL (`BOARD_URL` / `NET.base` in
-`multiplayer/CLIENT_CHANGES.md` §6–§7), e.g.
-`https://one-round-net.<your-subdomain>.workers.dev`.
+Then point the client at the deployed URL by setting `DEFAULT_SERVER` near
+the top of `index.html` (search for `var DEFAULT_SERVER`), e.g.
+
+```js
+var DEFAULT_SERVER = "https://one-round-net.<your-subdomain>.workers.dev";
+```
+
+Every visitor then gets the live board and duel lobby with no setup. Leave
+it `""` to ship fully offline. `?server=<url>` still overrides it for
+testing against a local `wrangler dev` (the value is remembered).
 
 Smoke test:
 

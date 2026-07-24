@@ -760,9 +760,13 @@ function dSin(x){
 }
 function dCos(x){ return dSin(x + _DHPI); }
 function hyp2(a,b){ return Math.sqrt(a*a + b*b); }
-// Multiplayer/shared-board server (Cloudflare Worker). Configure once with
-// ?server=https://<worker-url> (remembered), or set window.ONE_ROUND_SERVER.
-// Empty = fully offline: local board, duel lobby explains how to deploy.
+// Multiplayer/shared-board server (Cloudflare Worker).
+// DEFAULT_SERVER is the deployed backend every visitor gets with no setup —
+// online board and live duel lobby out of the box. Override for testing with
+// ?server=https://<worker-url> (remembered), or window.ONE_ROUND_SERVER.
+// Set DEFAULT_SERVER to "" to ship fully offline (local board, duel lobby
+// explains how to deploy). Deploy steps: multiplayer/server/README.md.
+var DEFAULT_SERVER = "";
 var NET_BASE = (function(){
   var m = location.search.match(/[?&]server=([^&]+)/);
   var v = m ? decodeURIComponent(m[1]) : "";
@@ -771,6 +775,7 @@ var NET_BASE = (function(){
     else v = localStorage.getItem("oneround:server") || "";
   } catch(e){}
   if (!v && typeof window.ONE_ROUND_SERVER === "string") v = window.ONE_ROUND_SERVER;
+  if (!v) v = DEFAULT_SERVER;
   return v.replace(/\/+$/,"");
 })();
 
@@ -4202,11 +4207,13 @@ function renderBoard(list){
 function openBoard(from){
   showVeil("vBoard", from);
   id("csIn").value = SAVE.callsign || "";
-  id("lbNote").innerHTML = Store.canShare
-    ? "This board is shared &mdash; your callsign and results are visible to everyone who opens this artifact."
-    : (Store.kind === "local"
-        ? "Saved in this browser only. Open the file from the artifact to share a board with other players."
-        : "Storage is unavailable here, so records last only for this session.");
+  id("lbNote").innerHTML = NET_BASE
+    ? "This board is live &mdash; every run is posted to the shared server, so your callsign and results are visible to everyone playing."
+    : (Store.canShare
+        ? "This board is shared &mdash; your callsign and results are visible to everyone who opens this artifact."
+        : (Store.kind === "local"
+            ? "Saved in this browser only. Deploy the duel server (multiplayer/server) to share a board with other players."
+            : "Storage is unavailable here, so records last only for this session."));
   id("lbBody").innerHTML = '<tr><td colspan="4" style="color:var(--slate);padding:18px 8px">Loading&hellip;</td></tr>';
   boardLoad(true).then(renderBoard).catch(function(){ renderBoard([]); });
 }
@@ -4302,6 +4309,7 @@ function duelConnect(code){
 function duelMessage(m){
   if (m.type === "joined"){
     NET.token = m.token; NET.slot = m.slot; NET.reconnects = 0;
+    duelNote("");                       // clear "Connecting…" — we are in
     id("dLobby").style.display = "none"; id("dRoom").style.display = "";
     id("dRoomCode").textContent = NET.code;
     id("dYou").textContent = "You: " + duelName() + (m.you && m.you.ready ? " — ready" : "");
