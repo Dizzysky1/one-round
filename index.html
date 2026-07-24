@@ -1962,8 +1962,7 @@ function offerUpgrades(){
   var out = [];
   var forced = targetsWanted(S.level) > S.stats.pierce;
   var avail = POOL.filter(function(u){
-    // Tracer stays re-offerable even though the card is tagged one-time.
-    if (u.once && u.id !== "tracer" && taken[u.id]) return false;
+    if (u.once && taken[u.id]) return false;
     if (u.ok && !u.ok()) return false;
     return true;
   });
