@@ -1,0 +1,14 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "leaderboard": {
+      ".read": true,
+      ".indexOn": ["s", "l", "k", "b"],
+      "$callsign": {
+        ".write": "newData.exists() && (!data.exists() || newData.child('n').val() === data.child('n').val())",
+        ".validate": "newData.hasChildren(['n', 's', 'l', 'k', 'b', 'w', 't']) && newData.child('n').isString() && newData.child('n').val().length > 0 && newData.child('n').val().length <= 12 && newData.child('s').isNumber() && newData.child('s').val() >= 0 && newData.child('s').val() <= 100000000 && (!data.exists() || newData.child('s').val() >= data.child('s').val()) && newData.child('l').isNumber() && newData.child('l').val() >= 0 && newData.child('l').val() <= 10000 && newData.child('k').isNumber() && newData.child('k').val() >= 0 && newData.child('k').val() <= 100000 && newData.child('b').isNumber() && newData.child('b').val() >= 0 && newData.child('b').val() <= 100 && newData.child('w').isString() && newData.child('w').val().length > 0 && newData.child('w').val().length <= 32 && newData.child('t').isNumber() && newData.child('t').val() > 0"
+      }
+    }
+  }
+}

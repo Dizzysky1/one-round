@@ -358,6 +358,39 @@
   .cs input{background:var(--paper);border:1px solid var(--ink);color:var(--ink);font-family:var(--mono);
     font-size:12px;letter-spacing:.14em;text-transform:uppercase;padding:9px 11px;width:190px}
   .cs label{font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--slate)}
+  .cs.stack{flex-direction:column;align-items:stretch;gap:8px;margin:18px 0 8px}
+  .cs.stack input{width:100%;box-sizing:border-box;font-size:16px;padding:12px 14px;letter-spacing:.18em}
+  .csHint{font-size:9px;letter-spacing:.1em;color:var(--slate);margin:0 0 14px;line-height:1.5}
+  .csErr{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--signal);min-height:1.2em;margin:0 0 10px}
+  .roster{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    margin:14px 0 4px;padding:10px 12px;border:1px solid var(--hair);background:rgba(245,243,238,.55)}
+  .roster .who{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+  .roster .who b{color:var(--ink);font-weight:700}
+  .roster .who span{color:var(--slate)}
+  .pill{font-family:var(--mono);font-size:8px;letter-spacing:.16em;text-transform:uppercase;
+    padding:5px 9px;border:1px solid var(--hair);color:var(--slate);white-space:nowrap}
+  .pill.on{border-color:var(--volt);color:var(--volt)}
+  .pill.off{border-color:var(--hair);color:var(--slate)}
+  .pill.hot{border-color:var(--signal);color:var(--signal)}
+  .linkish{background:none;border:0;padding:0;font-family:var(--mono);font-size:8.5px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--volt);cursor:pointer;text-decoration:underline;
+    text-underline-offset:3px}
+  .lbTop{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:2px}
+  .lbTop h2{margin:0}
+  .lbActions{display:flex;align-items:center;gap:8px}
+  .lbActions .go{width:auto;margin:0;padding:8px 12px;font-size:8.5px}
+  .board .ago{color:var(--slate);font-size:9px;font-weight:500;letter-spacing:.06em;text-align:right}
+  .youCard{margin-top:14px;padding:12px 14px;border:1px solid var(--ink);background:var(--paper);
+    display:grid;grid-template-columns:auto 1fr auto;gap:10px 14px;align-items:baseline}
+  .youCard .lab{font-size:8px;letter-spacing:.18em;text-transform:uppercase;color:var(--slate)}
+  .youCard b{font-size:18px;font-weight:700;letter-spacing:-.02em}
+  .youCard .rk{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--signal)}
+  .postLine{margin-top:12px;padding:10px 12px;border:1px solid var(--hair);font-family:var(--mono);
+    font-size:10px;letter-spacing:.08em;line-height:1.55;color:var(--slate)}
+  .postLine b{color:var(--ink);font-weight:700}
+  .postLine.ok{border-color:var(--volt);color:var(--volt)}
+  .postLine.ok b{color:var(--ink)}
+  .postLine.bad{border-color:var(--signal)}
   .note{font-size:9px;letter-spacing:.1em;color:var(--slate);margin-top:12px;line-height:1.6}
   .mini{display:grid;gap:4px;margin-top:12px}
   .mini div{display:grid;grid-template-columns:20px 1fr auto;gap:8px;font-size:11px;color:var(--slate)}
@@ -492,9 +525,34 @@
       <span><b>WASD</b> walk</span><span><b>Mouse</b> aim</span><span><b>Click</b> / <b>Space</b> fire</span>
       <span><b>Shift</b> creep</span><span><b>Esc</b> release cursor</span><span><b>1&ndash;3</b> pick upgrade</span>
     </div>
+    <div class="roster" id="startRoster">
+      <div class="who" id="startWho"><span>Callsign</span> <b>not set</b></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="pill off" id="startNet">Board &hellip;</span>
+        <button type="button" class="linkish" id="bChangeCs">Change</button>
+      </div>
+    </div>
     <button class="go" id="bStart">Step to the line</button>
     <button class="go ghost" id="bShop">Armoury</button>
     <button class="go ghost" id="bBoard">Leaderboard</button>
+  </div>
+</div>
+
+<!-- Callsign signup + online board © 2026 Aidiotic — LICENSE-ONLINE-LEADERBOARD -->
+<div class="veil" id="vCallsign">
+  <div class="card" style="max-width:440px">
+    <div class="kick" id="csKick">Sign in &middot; range roster</div>
+    <h2 id="csTitle">Callsign<em>.</em></h2>
+    <div class="rule"></div>
+    <p class="body" id="csBody">Pick a name for the leaderboard. It is saved in this browser and used when your run posts online.</p>
+    <div class="cs stack">
+      <label for="csStart">Callsign</label>
+      <input id="csStart" maxlength="12" placeholder="RECRUIT" autocomplete="username" spellcheck="false">
+    </div>
+    <p class="csHint">Letters, numbers, spaces, _ and - &middot; max 12 characters</p>
+    <p class="csErr" id="csStartErr" aria-live="polite"></p>
+    <button class="go" id="bCallsignGo">Take the line</button>
+    <button class="go ghost" id="bCallsignBack">Back</button>
   </div>
 </div>
 
@@ -551,6 +609,7 @@
       <div>
         <p class="body" id="oBody"></p>
         <div class="tally" id="oTally"></div>
+        <div class="postLine" id="oPost">Posting to the board&hellip;</div>
         <div class="mini" id="oMini"></div>
         <button class="go" id="bAgain">New range</button>
         <button class="go ghost" id="bShop2">Armoury</button>
@@ -575,7 +634,13 @@
 <div class="veil" id="vBoard">
   <div class="card" style="max-width:760px">
     <div class="kick">Range records</div>
-    <h2>Leaderboard<em>.</em></h2>
+    <div class="lbTop">
+      <h2>Leaderboard<em>.</em></h2>
+      <div class="lbActions">
+        <span class="pill off" id="lbPill">Board &hellip;</span>
+        <button type="button" class="go ghost" id="bBoardRefresh">Refresh</button>
+      </div>
+    </div>
     <div class="cs">
       <label for="csIn">Callsign</label>
       <input id="csIn" maxlength="12" placeholder="RECRUIT" autocomplete="off" spellcheck="false">
@@ -587,8 +652,19 @@
       <button data-k="k" data-on="0">Most targets</button>
     </div>
     <table class="board"><thead><tr>
-      <th class="rk">#</th><th>Callsign</th><th>Weapon</th><th class="vv" id="lbHead">Score</th>
+      <th class="rk">#</th><th>Callsign</th><th>Weapon</th><th class="vv" id="lbHead">Score</th><th class="ago">When</th>
     </tr></thead><tbody id="lbBody"></tbody></table>
+    <div class="youCard" id="lbYou" style="display:none">
+      <div class="rk" id="lbYouRank">—</div>
+      <div>
+        <div class="lab">Your standing</div>
+        <b id="lbYouName">—</b>
+      </div>
+      <div style="text-align:right">
+        <div class="lab" id="lbYouLab">Best run</div>
+        <b id="lbYouVal">—</b>
+      </div>
+    </div>
     <p class="note" id="lbNote"></p>
     <button class="go" id="bBoardBack">Back</button>
   </div>
@@ -623,6 +699,10 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="leaderboard-firebase.js"></script>
 <script src="mod-host.js"></script>
 <script>
 (function(){
@@ -2049,6 +2129,8 @@ function gameOver(left){
   S.phase = "over";
   releasePointer();
   sfx.fail();
+  var prevBest = SAVE.bestScore|0;
+  var isPb = S.score > prevBest;
   S.best = Math.max(S.best, S.score);
   SAVE.credits += S.score;
   SAVE.runs++;
@@ -2056,19 +2138,19 @@ function gameOver(left){
   SAVE.bestLevel = Math.max(SAVE.bestLevel, S.ranges);
   SAVE.bestShot  = Math.max(SAVE.bestShot, S.bestHit||0);
   saveGame();
-  boardSubmit({ n:(SAVE.callsign||"RECRUIT"), s:S.score, l:S.ranges, k:S.runKills,
-                b:S.bestBank, w:SAVE.weapon, t:Date.now() }).then(renderMini).catch(function(){});
   var killed = shot ? shot.kills : 0;
   var reason = shot ? shot.ending : "spent";
   oTitle.innerHTML = (reason === "sink" ? "Absorbed" :
                       reason === "pierce" ? "Out of pierce" :
                       killed ? "Not enough" : "Missed") + "<em>.</em>";
-  oKick.textContent = "Round spent \u00b7 range " + pad2(S.level);
+  oKick.textContent = "Round spent \u00b7 range " + pad2(S.level) +
+    (SAVE.callsign ? " \u00b7 " + SAVE.callsign : "");
   oBody.innerHTML = left + (left===1?" target":" targets") + " still standing when the round died" +
     (reason === "sink" ? ", swallowed by an absorber panel." :
      reason === "pierce" ? ", with the round's pierce used up." : ".") +
-    "<br><br>Final score <b>" + S.score + "</b> across <b>" + S.ranges + "</b> cleared " +
-    (S.ranges===1?"range":"ranges") + ".";
+    "<br><br>Final score <b>" + S.score.toLocaleString() + "</b> across <b>" + S.ranges + "</b> cleared " +
+    (S.ranges===1?"range":"ranges") +
+    (isPb ? " &mdash; <b>new personal best</b>." : ".") ;
   oPlotId.textContent = curMap.name.toUpperCase() + " \u00b7 RG-" + pad2(S.level);
   drawPlot(id("oPlot"), shot, shot ? shot.snap : null);
   drawElevation(id("oElev"), shot);
@@ -2078,9 +2160,55 @@ function gameOver(left){
     ["Targets", S.runKills],
     ["Ricochets", S.runBounces],
     ["Best bank", "x"+(1+Math.min(BANK_CAP,S.bestBank)*BANK_STEP).toFixed(1), true],
-    ["Best run", S.best]
+    ["Best run", SAVE.bestScore]
   ]);
+  var post = id("oPost");
+  if (post){
+    post.className = "postLine";
+    post.textContent = boardBackend === "firebase"
+      ? "Posting " + (SAVE.callsign || "RECRUIT") + " to the online board\u2026"
+      : "Saving run locally\u2026";
+  }
+  var entry = { n:(SAVE.callsign||"RECRUIT"), s:S.score, l:S.ranges, k:S.runKills,
+                b:S.bestBank, w:SAVE.weapon, t:Date.now() };
+  boardSubmit(entry).then(function(list){
+    renderMini(list);
+    updatePostLine(list, entry, isPb);
+  }).catch(function(){
+    if (post){
+      post.className = "postLine bad";
+      post.innerHTML = "Could not reach the online board &mdash; run kept in this browser.";
+    }
+  });
   vOver.classList.add("on");
+}
+function rankInList(list, callsign, key){
+  key = key || "s";
+  var me = (callsign||"").toUpperCase();
+  if (!me) return -1;
+  var rows = (list||[]).slice().sort(function(a,b){ return (b[key]|0)-(a[key]|0); });
+  for (var i=0;i<rows.length;i++){
+    if ((rows[i].n||"").toUpperCase() === me) return i+1;
+  }
+  return -1;
+}
+function updatePostLine(list, entry, isPb){
+  var post = id("oPost"); if (!post) return;
+  var rank = rankInList(list, entry.n, "s");
+  var online = boardBackend === "firebase";
+  var bits = [];
+  if (online){
+    post.className = "postLine ok";
+    bits.push("Posted online as <b>" + (entry.n||"RECRUIT") + "</b>");
+  } else {
+    post.className = "postLine";
+    bits.push("Saved locally as <b>" + (entry.n||"RECRUIT") + "</b>");
+  }
+  if (rank > 0) bits.push("board rank <b>#" + pad2(rank) + "</b>");
+  if (isPb) bits.push("<b>personal best</b>");
+  bits.push("score <b>" + (entry.s|0).toLocaleString() + "</b>");
+  post.innerHTML = bits.join(" \u00b7 ");
+  if (isPb) toastMsg("Personal best", (entry.s|0).toLocaleString() + " pts", "#1550D8");
 }
 
 // ======================================================================
@@ -2380,8 +2508,91 @@ function startRun(){
 }
 S.stats = freshStats();
 
-id("bStart").onclick = function(){ ac(); sfx.ui(); vStart.classList.remove("on"); startRun(); };
-id("bAgain").onclick = function(){ ac(); sfx.ui(); vOver.classList.remove("on"); startRun(); };
+// Callsign signup gate © 2026 Aidiotic — LICENSE-ONLINE-LEADERBOARD
+function sanitizeCallsignLive(raw){
+  // No trim — preserve a trailing space while the player is still typing a multi-word name.
+  return String(raw || "").replace(/[^A-Za-z0-9 _-]/g,"").toUpperCase().slice(0,12);
+}
+function sanitizeCallsign(raw){
+  return sanitizeCallsignLive(raw).trim();
+}
+function refreshRosterUI(){
+  var who = id("startWho");
+  var net = id("startNet");
+  var pill = id("lbPill");
+  var name = SAVE.callsign || "";
+  if (who){
+    who.innerHTML = name
+      ? "<span>Playing as</span> <b>" + name + "</b>"
+      : "<span>Callsign</span> <b>not set</b>";
+  }
+  var online = boardBackend === "firebase";
+  var label = online ? "Online board" : "Local board";
+  var cls = "pill " + (online ? "on" : "off");
+  if (net){ net.className = cls; net.textContent = label; }
+  if (pill){ pill.className = cls; pill.textContent = label; }
+}
+function openCallsignSignup(){
+  var err = id("csStartErr"); if (err) err.textContent = "";
+  var inp = id("csStart");
+  var returning = !!SAVE.callsign;
+  inp.value = SAVE.callsign || "";
+  var kick = id("csKick"), title = id("csTitle"), body = id("csBody"), go = id("bCallsignGo");
+  if (kick) kick.textContent = returning ? "Welcome back \u00b7 range roster" : "Sign in \u00b7 range roster";
+  if (title) title.innerHTML = returning ? "Confirm<em>.</em>" : "Callsign<em>.</em>";
+  if (body) body.textContent = returning
+    ? "This callsign is saved in your browser and posts to the shared board when a run ends. Edit it or take the line."
+    : "Pick a name for the leaderboard. It is saved in this browser and used when your run posts online.";
+  if (go) go.textContent = returning ? "Take the line" : "Join & take the line";
+  vStart.classList.remove("on");
+  id("vCallsign").classList.add("on");
+  setTimeout(function(){ try { inp.focus(); if (returning) inp.select(); } catch(e){} }, 30);
+}
+function confirmCallsignAndStart(){
+  var inp = id("csStart");
+  var name = sanitizeCallsign(inp.value);
+  inp.value = name;
+  var err = id("csStartErr");
+  if (!name){
+    if (err) err.textContent = "Enter a callsign to continue.";
+    try { inp.focus(); } catch(e){}
+    return;
+  }
+  if (err) err.textContent = "";
+  SAVE.callsign = name;
+  saveGame();
+  var boardIn = id("csIn"); if (boardIn) boardIn.value = name;
+  refreshRosterUI();
+  ac(); sfx.ui();
+  id("vCallsign").classList.remove("on");
+  startRun();
+}
+id("bStart").onclick = function(){ ac(); sfx.ui(); openCallsignSignup(); };
+id("bChangeCs").onclick = function(){ ac(); sfx.ui(); openCallsignSignup(); };
+id("bCallsignGo").onclick = function(){ confirmCallsignAndStart(); };
+id("bCallsignBack").onclick = function(){
+  sfx.ui();
+  id("vCallsign").classList.remove("on");
+  refreshRosterUI();
+  vStart.classList.add("on");
+};
+id("csStart").addEventListener("keydown", function(e){
+  if (e.key === "Enter"){ e.preventDefault(); confirmCallsignAndStart(); }
+});
+id("csStart").addEventListener("input", function(){
+  var cleaned = sanitizeCallsignLive(this.value);
+  if (this.value !== cleaned){
+    var pos = this.selectionStart;
+    this.value = cleaned;
+    try { this.setSelectionRange(pos, pos); } catch(e){}
+  }
+  var err = id("csStartErr"); if (err) err.textContent = "";
+});
+id("bAgain").onclick = function(){
+  ac(); sfx.ui(); vOver.classList.remove("on");
+  if (!SAVE.callsign) openCallsignSignup();
+  else startRun();
+};
 if (looksLikePhone()) enableTouch();
 updateDiag();
 
@@ -3154,10 +3365,45 @@ function loadGame(){
 }
 
 // ---------------------------------------------------------- leaderboard
+// Online Firebase path © 2026 Aidiotic — LICENSE-ONLINE-LEADERBOARD
 var BOARD_KEY = "oneround:board:v1", BOARD_MAX = 30;
 var boardCache = null;
+var boardBackend = "local"; // local | firebase
+
+function boardInitOnline(){
+  if (!window.OneRoundBoard || !window.ONE_ROUND_FIREBASE_CONFIG){
+    refreshRosterUI();
+    return Promise.resolve(false);
+  }
+  return OneRoundBoard.init(ONE_ROUND_FIREBASE_CONFIG).then(function(ok){
+    if (ok) boardBackend = "firebase";
+    else console.warn("[board] Firebase offline", OneRoundBoard.lastError && OneRoundBoard.lastError());
+    refreshRosterUI();
+    return ok;
+  }).catch(function(err){
+    console.warn("[board] init error", err);
+    refreshRosterUI();
+    return false;
+  });
+}
+
 function boardLoad(force){
   if (boardCache && !force) return Promise.resolve(boardCache);
+  if (boardBackend === "firebase" && window.OneRoundBoard){
+    return OneRoundBoard.load().then(function(list){
+      boardCache = list || [];
+      return boardCache;
+    }).catch(function(){
+      // fall back to local store
+      return Store.get(BOARD_KEY, Store.canShare).then(function(raw){
+        var list = [];
+        try { list = raw ? JSON.parse(raw) : []; } catch(e){ list = []; }
+        if (!Array.isArray(list)) list = [];
+        boardCache = list;
+        return list;
+      });
+    });
+  }
   return Store.get(BOARD_KEY, Store.canShare).then(function(raw){
     var list = [];
     try { list = raw ? JSON.parse(raw) : []; } catch(e){ list = []; }
@@ -3167,7 +3413,24 @@ function boardLoad(force){
   });
 }
 function boardSubmit(entry){
-  return boardLoad(true).then(function(list){
+  if (boardBackend === "firebase" && window.OneRoundBoard){
+    return OneRoundBoard.submit(entry).then(function(list){
+      boardCache = list || [];
+      // mirror locally for offline viewing
+      Store.set(BOARD_KEY, JSON.stringify(boardCache), false);
+      return boardCache;
+    }).catch(function(err){
+      console.warn("[board] Firebase submit failed, using local", err);
+      return boardSubmitLocal(entry);
+    });
+  }
+  return boardSubmitLocal(entry);
+}
+function boardSubmitLocal(entry){
+  return Store.get(BOARD_KEY, false).then(function(raw){
+    var list = [];
+    try { list = raw ? JSON.parse(raw) : []; } catch(e){ list = []; }
+    if (!Array.isArray(list)) list = [];
     var mine = -1;
     for (var i=0;i<list.length;i++) if (list[i].n === entry.n) mine = i;
     if (mine >= 0){
@@ -3179,7 +3442,7 @@ function boardSubmit(entry){
     list.sort(function(a,b){ return (b.s|0)-(a.s|0); });
     if (list.length > BOARD_MAX) list.length = BOARD_MAX;
     boardCache = list;
-    return Store.set(BOARD_KEY, JSON.stringify(list), Store.canShare).then(function(){ return list; });
+    return Store.set(BOARD_KEY, JSON.stringify(list), false).then(function(){ return list; });
   }).catch(function(){ return boardCache || []; });
 }
 
@@ -3392,7 +3655,7 @@ function updatePops(dt){
 var backTo = "vStart";
 function showVeil(idv, from){
   if (from) backTo = from;
-  ["vStart","vOver","vShop","vBoard"].forEach(function(v){ id(v).classList.remove("on"); });
+  ["vStart","vOver","vShop","vBoard","vCallsign"].forEach(function(v){ id(v).classList.remove("on"); });
   id(idv).classList.add("on");
 }
 function statBar(label, val, max, color){
@@ -3449,37 +3712,104 @@ function fmtVal(e, k){
   if (k === "b") return "x" + (1 + Math.min(BANK_CAP, e.b|0)*BANK_STEP).toFixed(1);
   return (e.k|0) + " down";
 }
+function fmtAgo(t){
+  t = +t || 0;
+  if (!t) return "\u2014";
+  var sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (sec < 45) return "just now";
+  if (sec < 3600) return Math.floor(sec/60) + "m ago";
+  if (sec < 86400) return Math.floor(sec/3600) + "h ago";
+  if (sec < 86400*14) return Math.floor(sec/86400) + "d ago";
+  try {
+    return new Date(t).toLocaleDateString(undefined, { month:"short", day:"numeric" });
+  } catch(e){ return "\u2014"; }
+}
 function renderBoard(list){
   var body = id("lbBody");
-  var rows = (list||[]).slice().sort(function(a,b){ return (b[lbKey]|0)-(a[lbKey]|0); }).slice(0,15);
+  var sorted = (list||[]).slice().sort(function(a,b){ return (b[lbKey]|0)-(a[lbKey]|0); });
+  var rows = sorted.slice(0,15);
   id("lbHead").textContent = LB_HEADS[lbKey];
-  if (!rows.length){
-    body.innerHTML = '<tr><td colspan="4" style="color:var(--slate);padding:18px 8px">' +
-      'No runs recorded yet. Finish a range and you are the record.</td></tr>';
-    return;
-  }
   var me = (SAVE.callsign||"").toUpperCase();
-  body.innerHTML = rows.map(function(e,i){
-    var w = weaponById(e.w);
-    return '<tr class="'+((e.n||"").toUpperCase()===me && me ? "me" : "")+'">' +
-      '<td class="rk">'+pad2(i+1)+'</td><td>'+(e.n||"RECRUIT")+'</td>' +
-      '<td class="wc">'+w.name+'</td><td class="vv">'+fmtVal(e, lbKey)+'</td></tr>';
-  }).join("");
+  if (!rows.length){
+    body.innerHTML = '<tr><td colspan="5" style="color:var(--slate);padding:18px 8px">' +
+      (boardBackend === "firebase"
+        ? "No online runs yet. Finish a range under your callsign and you open the board."
+        : "No runs recorded yet. Finish a range and you are the record.") +
+      "</td></tr>";
+  } else {
+    body.innerHTML = rows.map(function(e,i){
+      var w = weaponById(e.w);
+      return '<tr class="'+((e.n||"").toUpperCase()===me && me ? "me" : "")+'">' +
+        '<td class="rk">'+pad2(i+1)+'</td><td>'+(e.n||"RECRUIT")+'</td>' +
+        '<td class="wc">'+w.name+'</td><td class="vv">'+fmtVal(e, lbKey)+'</td>' +
+        '<td class="ago">'+fmtAgo(e.t)+'</td></tr>';
+    }).join("");
+  }
+  // Your standing card (even if outside top 15)
+  var you = id("lbYou");
+  if (you){
+    if (!me){
+      you.style.display = "none";
+    } else {
+      var mine = null, rank = -1;
+      for (var i=0;i<sorted.length;i++){
+        if ((sorted[i].n||"").toUpperCase() === me){ mine = sorted[i]; rank = i+1; break; }
+      }
+      if (!mine){
+        you.style.display = "none";
+      } else {
+        you.style.display = "grid";
+        id("lbYouRank").textContent = "#" + pad2(rank);
+        id("lbYouName").textContent = mine.n;
+        id("lbYouLab").textContent = LB_HEADS[lbKey];
+        id("lbYouVal").textContent = fmtVal(mine, lbKey);
+      }
+    }
+  }
+  refreshRosterUI();
+}
+function boardNoteHtml(){
+  if (boardBackend === "firebase"){
+    return "Live shared board &mdash; best scores per callsign, scores only go up. Highlighted row is you.";
+  }
+  var err = window.OneRoundBoard && OneRoundBoard.lastError && OneRoundBoard.lastError();
+  if (Store.canShare){
+    return "This board is shared &mdash; your callsign and results are visible to everyone who opens this artifact.";
+  }
+  if (Store.kind === "local"){
+    return "Local board only. Online Firebase unavailable" + (err ? " (" + err + ")" : "") + ".";
+  }
+  return "Storage is unavailable here, so records last only for this session.";
 }
 function openBoard(from){
   showVeil("vBoard", from);
   id("csIn").value = SAVE.callsign || "";
-  id("lbNote").innerHTML = Store.canShare
-    ? "This board is shared &mdash; your callsign and results are visible to everyone who opens this artifact."
-    : (Store.kind === "local"
-        ? "Saved in this browser only. Open the file from the artifact to share a board with other players."
-        : "Storage is unavailable here, so records last only for this session.");
-  id("lbBody").innerHTML = '<tr><td colspan="4" style="color:var(--slate);padding:18px 8px">Loading&hellip;</td></tr>';
-  boardLoad(true).then(renderBoard).catch(function(){ renderBoard([]); });
+  id("lbNote").innerHTML = "Connecting to online board&hellip;";
+  id("lbBody").innerHTML = '<tr><td colspan="5" style="color:var(--slate);padding:18px 8px">Loading&hellip;</td></tr>';
+  var you = id("lbYou"); if (you) you.style.display = "none";
+  refreshRosterUI();
+  boardInitOnline().then(function(){
+    refreshRosterUI();
+    id("lbNote").innerHTML = boardNoteHtml();
+    return boardLoad(true);
+  }).then(renderBoard).catch(function(){
+    id("lbNote").innerHTML = boardNoteHtml();
+    renderBoard([]);
+  });
 }
 id("bBoard").onclick = function(){ ac(); openBoard("vStart"); };
 id("bBoard2").onclick = function(){ openBoard("vOver"); };
 id("bBoardBack").onclick = function(){ sfx.ui(); showVeil(backTo); };
+id("bBoardRefresh").onclick = function(){
+  sfx.ui();
+  id("lbNote").innerHTML = "Refreshing&hellip;";
+  boardLoad(true).then(function(list){
+    id("lbNote").innerHTML = boardNoteHtml();
+    renderBoard(list);
+  }).catch(function(){
+    id("lbNote").innerHTML = boardNoteHtml();
+  });
+};
 (function(){
   var t = id("lbTabs").children;
   for (var i=0;i<t.length;i++){
@@ -3491,16 +3821,25 @@ id("bBoardBack").onclick = function(){ sfx.ui(); showVeil(backTo); };
   }
 })();
 id("csIn").oninput = function(){
-  SAVE.callsign = this.value.replace(/[^A-Za-z0-9 _-]/g,"").toUpperCase().slice(0,12);
-  this.value = SAVE.callsign;
+  var live = sanitizeCallsignLive(this.value);
+  this.value = live;
+  SAVE.callsign = live.trim();
   saveGame();
+  var startIn = id("csStart"); if (startIn) startIn.value = SAVE.callsign;
+  refreshRosterUI();
+  if (boardCache) renderBoard(boardCache);
 };
 
 function renderMini(list){
   var rows = (list||[]).slice().sort(function(a,b){ return (b.s|0)-(a.s|0); }).slice(0,3);
+  var me = (SAVE.callsign||"").toUpperCase();
+  var label = boardBackend === "firebase" ? "Online top" : "Top runs";
   id("oMini").innerHTML = rows.length
-    ? '<div style="color:var(--slate);font-size:8px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:2px">Top runs</div>' +
-      rows.map(function(e,i){ return '<div><span>'+pad2(i+1)+'</span><b>'+(e.n||"RECRUIT")+'</b><span>'+(e.s|0).toLocaleString()+'</span></div>'; }).join("")
+    ? '<div style="color:var(--slate);font-size:8px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:2px">'+label+'</div>' +
+      rows.map(function(e,i){
+        var mine = me && (e.n||"").toUpperCase() === me;
+        return '<div style="'+(mine?"color:var(--ink)":"")+'"><span>'+pad2(i+1)+'</span><b>'+(e.n||"RECRUIT")+(mine?" \u00b7 you":"")+'</b><span>'+(e.s|0).toLocaleString()+'</span></div>';
+      }).join("")
     : "";
 }
 
@@ -3518,7 +3857,11 @@ function bootMeta(){
     id("oSens").value = S.opt.sens; id("oFov").value = S.opt.fov;
     if (SAVE.weapon !== "ranger") equipWeapon(SAVE.weapon);
     applyFxMode();
-    boardLoad().then(renderMini).catch(function(){});
+    refreshRosterUI();
+    boardInitOnline().then(function(){
+      refreshRosterUI();
+      return boardLoad(true);
+    }).then(renderMini).catch(function(){});
   });
 }
 

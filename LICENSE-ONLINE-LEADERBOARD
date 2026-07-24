@@ -1,0 +1,57 @@
+ONE ROUND Online Leaderboard License
+====================================
+
+Copyright (c) 2026 Aidiotic (https://github.com/Aidiotic)
+
+This license covers the ONE ROUND Online Leaderboard system — the shared
+Firebase board, callsign roster flow, and related presentation — including:
+
+  - Firebase Realtime Database integration for the shared board:
+      `leaderboard-firebase.js`, `firebase-config.js` / `firebase-config.json`,
+      `firebase.json`, `.firebaserc`, `database.rules.json`, and the game's
+      Firebase `boardLoad` / `boardSubmit` / `boardInitOnline` path;
+  - Callsign signup and browser persistence:
+      the `vCallsign` veil, start-button callsign gate, welcome-back /
+      confirm copy, sanitization helpers, and `SAVE.callsign` save/load;
+  - Roster and board presentation added for this system:
+      start-screen roster strip (playing-as + online/local pill + change),
+      game-over post line (online/local result, rank, personal-best),
+      leaderboard connection pill, refresh control, relative-time column,
+      “your standing” card, online empty states, and related CSS/HTML/JS;
+  - Documentation for this system (e.g. `LEADERBOARD.md`).
+
+It does not claim copyright over the rest of ONE ROUND authored by others
+(including core range gameplay, weapons/armoury, upgrades, and the original
+local-only board shell authored before this system), nor over separate
+contributions covered by LICENSE-TRACER-MAP, LICENSE-FRAME-INDICATOR, or
+LICENSE-MOD-LAUNCHER.
+
+Permission is granted to use, copy, distribute, and work on this system —
+including fixes, extensions, ports, and continued online-mode development —
+as part of ONE ROUND or compatible forks.
+
+Conditions
+----------
+
+  1. **Attribution** — Published copies and derivatives must credit
+     Aidiotic as the originating author of this Online Leaderboard system
+     and retain a copy of or prominent link to this license.
+
+  2. **Compliance on request** — If Aidiotic requests in writing that
+     covered code be omitted from a distribution or changed in a stated
+     way, you must comply within a reasonable period (ordinarily 30 days
+     unless another deadline is given).
+
+  3. **No misattribution** — Do not present this system as solely your
+     own work without acknowledging Aidiotic's authorship.
+
+Unlike LICENSE-TRACER-MAP and LICENSE-FRAME-INDICATOR, modifications and
+continued development do **not** require prior written permission. You may
+improve, extend, and maintain this system for offline and online use,
+subject to attribution and compliance on request.
+
+If you omit this system from a fork entirely, this license does not apply
+to what you leave out. If you include it, keep the credit and honor any
+valid omission or change request from Aidiotic.
+
+Questions and requests: open an issue or contact Aidiotic on GitHub.
