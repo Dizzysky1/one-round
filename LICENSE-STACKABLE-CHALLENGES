@@ -1,0 +1,52 @@
+ONE ROUND Stackable Challenges License
+======================================
+
+Copyright (c) 2026 Aidiotic (https://github.com/Aidiotic)
+
+This license covers the ONE ROUND Stackable Challenges system — the
+multi-select challenge modes, stacking rules, and related presentation —
+including:
+
+  - Multi-select challenge modes:
+      Blind Fire, Bank Only, Hard Plate, One Rebound, Iron Chamber,
+      Bare Rack, and Pin Rifle;
+  - Challenge stat stacking and difficulty-scaled credit payouts;
+  - HUD and start-screen challenge UI (selection, active-challenge
+      display, and related gating);
+  - Pin Rifle tracer-lite preview behavior and the challenge-only
+      `PIN_WEAPON` loadout;
+  - Related CSS/HTML/JS for this system, and this license file itself.
+
+It does not claim copyright over the rest of ONE ROUND authored by others,
+nor over separate contributions covered by LICENSE-TRACER-MAP or
+LICENSE-FRAME-INDICATOR.
+
+Permission is granted to use, copy, distribute, and work on this system —
+including fixes, extensions, ports, and continued development — as part
+of ONE ROUND or compatible forks.
+
+Conditions
+----------
+
+  1. **Attribution** — Published copies and derivatives must credit
+     Aidiotic as the originating author of this Stackable Challenges
+     system and retain a copy of or prominent link to this license.
+
+  2. **Compliance on request** — If Aidiotic requests in writing that
+     covered code be omitted from a distribution or changed in a stated
+     way, you must comply within a reasonable period (ordinarily 30 days
+     unless another deadline is given).
+
+  3. **No misattribution** — Do not present this system as solely your
+     own work without acknowledging Aidiotic's authorship.
+
+Unlike LICENSE-TRACER-MAP and LICENSE-FRAME-INDICATOR, modifications and
+continued development do **not** require prior written permission. You may
+improve, extend, and maintain this system, subject to attribution and
+compliance on request.
+
+If you omit this system from a fork entirely, this license does not apply
+to what you leave out. If you include it, keep the credit and honor any
+valid omission or change request from Aidiotic.
+
+Questions and requests: open an issue or contact Aidiotic on GitHub.

@@ -226,6 +226,8 @@
     letter-spacing:.16em;text-transform:uppercase;padding:7px 8px}
   .seg button:last-child{border-right:0}
   .seg button[data-on="1"]{background:var(--ink);color:var(--bone)}
+  /* Stackable Challenges © 2026 Aidiotic — see LICENSE-STACKABLE-CHALLENGES
+     (attribution required; continued development allowed). */
   .chal-block{margin:16px 0 4px}
   .chal-block .lab{margin-bottom:8px}
   .chals{display:flex;flex-wrap:wrap;border:1px solid var(--ink)}
@@ -527,6 +529,7 @@
       <span><b>Shift</b> creep</span><span><b>Esc</b> release cursor</span><span><b>1&ndash;3</b> pick upgrade</span>
     </div>
     <div class="chal-block">
+      <!-- Stackable Challenges © 2026 Aidiotic — see LICENSE-STACKABLE-CHALLENGES -->
       <div class="lab">Challenges <span style="color:var(--slate);letter-spacing:.12em">(stack)</span></div>
       <div class="chals" id="chalSeg">
         <button type="button" data-chal="blind">Blind Fire</button>
@@ -819,6 +822,11 @@ var S = {
   opt:{ sens:21, fov:74, invert:false, raw:true, sound:true, shake:!reduceMotion, grain:!reduceMotion, fx:true, haptic:true }
 };
 
+// ======================================================================
+//  STACKABLE CHALLENGES
+//  © 2026 Aidiotic — see LICENSE-STACKABLE-CHALLENGES
+//  (attribution required; continued development allowed).
+// ======================================================================
 var CHALLENGES = [
   { id:"blind", name:"Blind Fire", rewardMul:1.35,
     note:"No tracer preview. Tracer Sight is banned from the upgrade pool." },
@@ -4295,6 +4303,7 @@ function equipPinRifle(){
 }
 
 // Challenge-only Pin Rifle — not sold in the Armoury
+// © 2026 Aidiotic — see LICENSE-STACKABLE-CHALLENGES
 var PIN_WEAPON = {
   id:"pin", name:"Pin Rifle",
   st:{ bounces:2, pierce:1, radius:0.07, tracerLite:true },
