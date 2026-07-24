@@ -345,8 +345,10 @@ var LEVEL_CASES = [
   // ---- slice 3: spotClear + goldenPoints + pathDistance + buildLevel
   //      (index.html:1055-1174)
   var gen = slice("function spotClear(x,z,minPlayer,pad){",
-                  "buildDressing();\n  refreshHUD();\n  showBanner();\n}");
-  gen = subst(gen, "Math.random()", "rnd()", 17, "levelgen rng sites");      // CLIENT_CHANGES §2
+                  "buildDressing();\n  sun.shadow.needsUpdate = true;\n  refreshHUD();\n  showBanner();\n}");
+  // 15 sites since the off-path fallback-target loop was removed (bug fix:
+  // fallback targets broke the every-range-is-clearable guarantee)
+  gen = subst(gen, "Math.random()", "rnd()", 15, "levelgen rng sites");      // CLIENT_CHANGES §2
   gen = subst(gen, "Math.hypot(", "hyp2(", 3, "levelgen hypot sites");       // CLIENT_CHANGES §3
   gen = subst(gen, "Math.sin(", "dSin(", 2, "golden dir sin");               // CLIENT_CHANGES §4
   gen = subst(gen, "Math.cos(", "dCos(", 3, "golden dir cos");               // CLIENT_CHANGES §4
@@ -368,6 +370,7 @@ var LEVEL_CASES = [
     "function applyMap(m){ curMap=m; ROOM.w=m.w; ROOM.d=m.d; ROOM.h=m.h; }",
     "function pickMap(){ throw new Error('pickMap must never run during seeded duel levelgen'); }",
     "function buildDressing(){} function refreshHUD(){} function showBanner(){}",
+    "var sun={shadow:{}};",
     "function addBlock(cx,cz,w,h,d,kind,style){",
     "  blocks.push({ min:new THREE.Vector3(cx-w/2,0,cz-d/2),",
     "                max:new THREE.Vector3(cx+w/2,h,cz+d/2), kind:kind });",

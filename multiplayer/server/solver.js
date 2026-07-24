@@ -321,7 +321,7 @@ function solvePath(ctx, origin, dir, ghost, stats) {
       events.push({ at: dist, type: "sink", p: wp.clone(), n: sHit.n.clone() });
       ending = "sink"; break;
     }
-    if (bounces <= 0) {
+    if (bounces <= 0 && sHit.kind !== "pad") {
       events.push({ at: dist, type: "stop", p: wp.clone(), n: sHit.n.clone() });
       ending = "spent"; break;
     }
@@ -478,16 +478,10 @@ function generateLevel(seed, mapId, level, stats) {
   var spots = goldenPoints(ctx, playerPos, level, stats, need, rng);
   var moveSpan = level < 3 ? 0 : Math.min(0.6 + (level - 3) * 0.28, 2.4);
 
+  // only hang targets on the solved golden line — an off-path fallback
+  // target can make a range unclearable (mirrors index.html buildLevel)
   for (var t = 0; t < need; t++) {
     var pos = spots[t];
-    if (!pos) {
-      for (tries = 0; tries < 200; tries++) {
-        var rx = (rng() - 0.5) * (ctx.room.w - 7), rz = (rng() - 0.5) * (ctx.room.d - 7);
-        if (spotClear(ctx, playerPos, rx, rz, Math.min(10, Math.max(4.5, ctx.room.d * 0.24)), 1.35)) {
-          pos = new Vec3(rx, 1, rz); break;
-        }
-      }
-    }
     if (!pos) continue;
     var armored = armorLeft > 0 && rng() < 0.55;
     if (armored) armorLeft--;
@@ -652,6 +646,16 @@ function solve(seed, mapId, level, pos, aim, ph, stats) {
   var origin = new Vec3(pos[0] + aim[0] * MUZZLE_OFF,
                         pos[1] + aim[1] * MUZZLE_OFF,
                         pos[2] + aim[2] * MUZZLE_OFF);
+  // mirrors solveOrigin() in index.html: a muzzle embedded in a block
+  // falls back to the eye so the round cannot skip that face
+  for (var ob = 0; ob < levelData.blocks.length; ob++) {
+    var obb = levelData.blocks[ob];
+    if (origin.x > obb.min.x && origin.x < obb.max.x &&
+        origin.y > obb.min.y && origin.y < obb.max.y &&
+        origin.z > obb.min.z && origin.z < obb.max.z) {
+      origin.set(pos[0], pos[1], pos[2]); break;
+    }
+  }
   var dir = new Vec3(aim[0], aim[1], aim[2]);
   var ctx = { room: levelData.room, blocks: levelData.blocks, enemies: levelData.enemies };
   var result = solvePath(ctx, origin, dir, false, stats);
