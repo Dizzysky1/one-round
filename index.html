@@ -155,13 +155,29 @@
 
   /* tracer map (earned with Tracer Sight)
      Copyright (c) 2026 Aidiotic — see LICENSE-TRACER-MAP.
-     Modifications only by Aidiotic or with prior written permission. */
-  .br{bottom:16px;right:16px;padding:10px 11px 11px;opacity:0;transition:opacity .18s;pointer-events:none}
+     Modifications only by Aidiotic or with prior written permission.
+     FRAME timing indicator © 2026 Aidiotic — LICENSE-FRAME-INDICATOR. */
+  .br{bottom:16px;right:16px;padding:10px 11px 11px;opacity:0;transition:opacity .18s, box-shadow .2s;
+    pointer-events:none}
   .br.on{opacity:1}
+  .br.frame{box-shadow:inset 0 0 0 1.5px var(--signal), 0 0 0 1px rgba(217,59,36,.18);
+    animation:fpPulse 1.1s ease-in-out infinite}
   .br .cardhead{margin-bottom:7px}
-  .br canvas{display:block;width:196px;height:196px;background:var(--paper);border:1px solid var(--hair)}
+  .br .cardhead .lab:last-child{font-variant-numeric:tabular-nums}
+  .br canvas{display:block;width:196px;height:196px;background:var(--paper);border:1px solid var(--hair);
+    transition:border-color .2s}
+  .br.frame canvas{border-color:var(--signal)}
   .br .legend{margin-top:7px;gap:7px}
   .br .legend span{font-size:7.5px}
+  .br .legend .fp{color:var(--signal);font-weight:700;letter-spacing:.12em;display:none}
+  .br.frame .legend .fp{display:inline}
+  @keyframes fpPulse{
+    0%,100%{box-shadow:inset 0 0 0 1.5px var(--signal), 0 0 0 1px rgba(217,59,36,.12)}
+    50%{box-shadow:inset 0 0 0 2px var(--signal), 0 0 12px 0 rgba(217,59,36,.22)}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .br.frame{animation:none}
+  }
   body.touch .br{right:auto;left:16px;bottom:calc(24px + env(safe-area-inset-bottom))}
   body.touch .br canvas{width:140px;height:140px}
 
@@ -371,6 +387,7 @@
   @media(prefers-reduced-motion:reduce){
     .grain{display:none}
     .banner.on{animation-duration:.6s}
+    .br.frame{animation:none}
   }
 </style>
 </head>
@@ -416,6 +433,7 @@
       <span><i style="background:#D93B24"></i>Kill</span>
       <span><i style="background:#E0912A"></i>Pad</span>
       <span><i style="background:#14161A"></i>Sink</span>
+      <span class="fp">FRAME</span>
     </div>
   </div>
   <div class="tape" id="tape"></div>
@@ -2366,6 +2384,7 @@ updateDiag();
 // ======================================================================
 //  PREVIEW (tracer sight)
 //  © 2026 Aidiotic — LICENSE-TRACER-MAP (no third-party rewrites without OK)
+//  Frame-perfect timing probe © 2026 Aidiotic — LICENSE-FRAME-INDICATOR
 // ======================================================================
 function hidePreviewDots(){
   for (var i=0;i<previewDots.children.length;i++) previewDots.children[i].visible = false;
@@ -2375,7 +2394,10 @@ function hideTracerPreview(){
   preview.visible = false;
   previewHalo.visible = false;
   hidePreviewDots();
-  id("miniBox").classList.remove("on");
+  var box = id("miniBox");
+  box.classList.remove("on");
+  box.classList.remove("frame");
+  id("miniStat").textContent = "\u2014";
 }
 function writePreviewLine(geo, line, pts, cap){
   var arr = geo.attributes.position.array;
@@ -2389,10 +2411,74 @@ function writePreviewLine(geo, line, pts, cap){
   if (line.computeLineDistances) line.computeLineDistances();
   line.visible = n > 1;
 }
-function drawMiniMap(pv){
+/* Frame-perfect: this exact fire timing is required. Current preview lands a
+   kill that disappears if you fire ~1 frame earlier AND ~1 frame later
+   (enemy patrol phase + your position along movement). */
+function isFramePerfectAttempt(pvNow){
+  if (!pvNow || !(pvNow.kills > 0)) return false;
+
+  var curKills = {};
+  for (var e=0;e<pvNow.events.length;e++){
+    if (pvNow.events[e].type === "kill") curKills[pvNow.events[e].i] = true;
+  }
+  var killIds = Object.keys(curKills);
+  if (!killIds.length) return false;
+
+  var frameDt = 1/60;
+  var slowK = 1 - Math.min(0.62, S.stats.chrono * 0.21);
+  var savedPlayer = player.pos.clone();
+  var saved = [];
+  for (var i=0;i<enemies.length;i++){
+    var en = enemies[i];
+    if (!en.alive) continue;
+    saved.push({ i:i, x:en.pos.x, z:en.pos.z, t:en.t, span:en.span });
+  }
+
+  function applyOffset(sign){
+    for (var j=0;j<saved.length;j++){
+      var s = saved[j], e2 = enemies[s.i];
+      if (s.span > 0){
+        var t = s.t + sign * frameDt * e2.speed * slowK;
+        var off = Math.sin(t) * e2.span;
+        e2.pos.set(e2.base.x + (e2.axis ? off : 0), 0, e2.base.y + (e2.axis ? 0 : off));
+      }
+    }
+    // Your position one frame earlier/later along current movement
+    player.pos.copy(savedPlayer).addScaledVector(player.vel, sign * frameDt);
+    player.pos.y = EYE;
+  }
+  function restore(){
+    for (var j=0;j<saved.length;j++){
+      enemies[saved[j].i].pos.set(saved[j].x, 0, saved[j].z);
+    }
+    player.pos.copy(savedPlayer);
+  }
+  function killMapAt(sign){
+    applyOffset(sign);
+    var pv = solvePath(muzzle(), aimDir(), false);
+    var ks = {};
+    for (var k=0;k<pv.events.length;k++){
+      if (pv.events[k].type === "kill") ks[pv.events[k].i] = true;
+    }
+    restore();
+    return ks;
+  }
+
+  var early = killMapAt(-1);
+  var late = killMapAt(1);
+  var tight = {};
+  for (var n=0;n<killIds.length;n++){
+    var idx = +killIds[n];
+    // Must miss both one frame early and one frame late — only this frame works
+    if (!early[idx] && !late[idx]) tight[idx] = true;
+  }
+  return Object.keys(tight).length ? tight : false;
+}
+function drawMiniMap(pv, frameTight){
   var canvas = id("miniMap"), g = canvas.getContext("2d");
   var W = canvas.width, H = canvas.height, pad = 18;
   var sc = Math.min((W-pad*2)/ROOM.w, (H-pad*2)/ROOM.d);
+  var framePerfect = frameTight && Object.keys(frameTight).length > 0;
   function X(x){ return W/2 + x*sc; }
   function Y(z){ return H/2 + z*sc; }
   g.clearRect(0,0,W,H);
@@ -2404,33 +2490,63 @@ function drawMiniMap(pv){
   }
   g.strokeStyle = "#14161A"; g.lineWidth = 2;
   g.strokeRect(X(-ROOM.w/2), Y(-ROOM.d/2), ROOM.w*sc, ROOM.d*sc);
+
   for (var b=0;b<blocks.length;b++){
     var bk = blocks[b];
     var bw = (bk.max.x-bk.min.x)*sc, bh = (bk.max.z-bk.min.z)*sc;
     g.fillStyle = bk.kind==="pad" ? "rgba(224,145,42,.62)"
                : bk.kind==="sink" ? "rgba(20,22,26,.88)" : "rgba(20,22,26,.16)";
     g.fillRect(X(bk.min.x), Y(bk.min.z), bw, bh);
+    if (bk.kind === "solid"){
+      g.strokeStyle = "rgba(20,22,26,.28)"; g.lineWidth = 1;
+      g.strokeRect(X(bk.min.x)+0.5, Y(bk.min.z)+0.5, bw-1, bh-1);
+    }
   }
+
+  // Patrol lanes for moving targets
+  for (var t0=0;t0<enemies.length;t0++){
+    var em = enemies[t0]; if (!em.alive || !(em.span > 0)) continue;
+    var x0 = em.axis ? em.base.x - em.span : em.base.x;
+    var z0 = em.axis ? em.base.y : em.base.y - em.span;
+    var x1 = em.axis ? em.base.x + em.span : em.base.x;
+    var z1 = em.axis ? em.base.y : em.base.y + em.span;
+    g.strokeStyle = "rgba(217,59,36,.28)"; g.lineWidth = 1.5;
+    g.setLineDash([4, 4]);
+    g.beginPath(); g.moveTo(X(x0), Y(z0)); g.lineTo(X(x1), Y(z1)); g.stroke();
+    g.setLineDash([]);
+  }
+
   for (var t=0;t<enemies.length;t++){
     var en = enemies[t]; if (!en.alive) continue;
+    var ex = X(en.pos.x), ez = Y(en.pos.z);
+    if (frameTight && frameTight[t]){
+      g.strokeStyle = "rgba(217,59,36,.55)"; g.lineWidth = 2;
+      g.beginPath(); g.arc(ex, ez, 11, 0, 6.2832); g.stroke();
+    }
     g.strokeStyle = en.armored ? "#6E7076" : "#D93B24";
     g.lineWidth = 3;
     g.beginPath();
-    g.moveTo(X(en.pos.x)-7, Y(en.pos.z)-7); g.lineTo(X(en.pos.x)+7, Y(en.pos.z)+7);
-    g.moveTo(X(en.pos.x)+7, Y(en.pos.z)-7); g.lineTo(X(en.pos.x)-7, Y(en.pos.z)+7);
+    g.moveTo(ex-7, ez-7); g.lineTo(ex+7, ez+7);
+    g.moveTo(ex+7, ez-7); g.lineTo(ex-7, ez+7);
     g.stroke();
   }
-  g.fillStyle = "#14161A";
-  g.beginPath(); g.arc(X(player.pos.x), Y(player.pos.z), 5, 0, 6.2832); g.fill();
+
+  // Player chevron (facing aim)
   var ad = aimDir();
-  g.strokeStyle = "#14161A"; g.lineWidth = 2;
+  var px = X(player.pos.x), pz = Y(player.pos.z);
+  var ang = Math.atan2(ad.z, ad.x);
+  g.save();
+  g.translate(px, pz);
+  g.rotate(ang);
+  g.fillStyle = "#14161A";
   g.beginPath();
-  g.moveTo(X(player.pos.x), Y(player.pos.z));
-  g.lineTo(X(player.pos.x + ad.x*2.4), Y(player.pos.z + ad.z*2.4));
-  g.stroke();
+  g.moveTo(8, 0); g.lineTo(-5, 5.5); g.lineTo(-2.5, 0); g.lineTo(-5, -5.5);
+  g.closePath(); g.fill();
+  g.restore();
 
   if (pv && pv.pts.length > 1){
-    g.strokeStyle = "rgba(122,162,255,.55)"; g.lineWidth = 6; g.lineJoin = "round";
+    g.lineCap = "round"; g.lineJoin = "round";
+    g.strokeStyle = "rgba(122,162,255,.5)"; g.lineWidth = 6;
     g.beginPath(); g.moveTo(X(pv.pts[0].x), Y(pv.pts[0].z));
     for (var p=1;p<pv.pts.length;p++) g.lineTo(X(pv.pts[p].x), Y(pv.pts[p].z));
     g.stroke();
@@ -2439,32 +2555,59 @@ function drawMiniMap(pv){
     for (var p2=1;p2<pv.pts.length;p2++) g.lineTo(X(pv.pts[p2].x), Y(pv.pts[p2].z));
     g.stroke();
 
+    var bounceNum = 0;
     for (var e=0;e<pv.events.length;e++){
       var ev = pv.events[e];
+      var mx = X(ev.p.x), mz = Y(ev.p.z);
       if (ev.type === "bounce" || ev.type === "pad"){
+        bounceNum++;
         g.fillStyle = ev.type === "pad" ? "#E0912A" : "#1550D8";
-        g.beginPath(); g.arc(X(ev.p.x), Y(ev.p.z), 5, 0, 6.2832); g.fill();
+        g.beginPath(); g.arc(mx, mz, 5.5, 0, 6.2832); g.fill();
+        g.fillStyle = "#F5F3EE";
+        g.font = "bold 8px ui-monospace, monospace";
+        g.textAlign = "center"; g.textBaseline = "middle";
+        g.fillText(String(bounceNum), mx, mz + 0.5);
       } else if (ev.type === "kill"){
-        g.strokeStyle = "#D93B24"; g.lineWidth = 3;
-        g.beginPath();
-        g.moveTo(X(ev.p.x)-6, Y(ev.p.z)-6); g.lineTo(X(ev.p.x)+6, Y(ev.p.z)+6);
-        g.moveTo(X(ev.p.x)+6, Y(ev.p.z)-6); g.lineTo(X(ev.p.x)-6, Y(ev.p.z)+6);
-        g.stroke();
+        if (ev.head){
+          g.fillStyle = "#D93B24";
+          g.beginPath(); g.arc(mx, mz, 4.5, 0, 6.2832); g.fill();
+          g.strokeStyle = "#F5F3EE"; g.lineWidth = 1.5;
+          g.beginPath();
+          g.moveTo(mx-3, mz-3); g.lineTo(mx+3, mz+3);
+          g.moveTo(mx+3, mz-3); g.lineTo(mx-3, mz+3);
+          g.stroke();
+        } else {
+          g.strokeStyle = "#D93B24"; g.lineWidth = 3;
+          g.beginPath();
+          g.moveTo(mx-6, mz-6); g.lineTo(mx+6, mz+6);
+          g.moveTo(mx+6, mz-6); g.lineTo(mx-6, mz+6);
+          g.stroke();
+        }
       } else if (ev.type === "sink" || ev.type === "stop"){
-        g.fillStyle = "#14161A";
-        g.beginPath(); g.arc(X(ev.p.x), Y(ev.p.z), 5.5, 0, 6.2832); g.fill();
+        g.fillStyle = ev.type === "sink" ? "#14161A" : "#6B7079";
+        g.beginPath(); g.arc(mx, mz, 5.5, 0, 6.2832); g.fill();
       }
     }
   }
-  var kills = pv ? pv.events.filter(function(ev){ return ev.type==="kill"; }).length : 0;
-  var bounces = pv ? pv.bounces : 0;
-  id("miniStat").textContent = kills + " hit \u00b7 " + bounces + " ric";
+
+  var kills = pv ? pv.kills|0 : 0;
+  var bounces = pv ? pv.bounces|0 : 0;
+  var metres = pv ? Math.round(pv.length||0) : 0;
+  var stat = kills + " hit \u00b7 " + bounces + " ric";
+  if (metres > 0) stat += " \u00b7 " + metres + "m";
+  if (framePerfect) stat += " \u00b7 FRAME";
+  id("miniStat").textContent = stat;
+  id("miniBox").classList.toggle("frame", !!framePerfect);
 }
 var previewTick = 0;
+var _upFromZ = new THREE.Vector3(0,0,1);
 function updatePreview(){
   var pv = solvePath(muzzle(), aimDir(), false);
   writePreviewLine(previewGeo, preview, pv.pts, PREVIEW_CAP);
   writePreviewLine(previewHaloGeo, previewHalo, pv.pts, PREVIEW_CAP);
+  // Soft pulse on halo when the path lands kills
+  previewHalo.material.opacity = (pv.kills > 0) ? 0.36 : 0.28;
+
   hidePreviewDots();
   var d = 0;
   for (var e=0;e<pv.events.length && d<previewDots.children.length;e++){
@@ -2472,19 +2615,24 @@ function updatePreview(){
     if (ev.type !== "bounce" && ev.type !== "pad") continue;
     var ring = previewDots.children[d++];
     ring.position.copy(ev.p).addScaledVector(ev.n, 0.03);
-    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), ev.n);
+    ring.quaternion.setFromUnitVectors(_upFromZ, ev.n);
     ring.material.color.setHex(ev.type === "pad" ? 0xE0912A : 0x1550D8);
     ring.visible = true;
   }
   var k = 0;
+  var tPulse = 0.92 + 0.08 * Math.sin(performance.now() * 0.008);
   for (var e2=0;e2<pv.events.length && k<previewKills.children.length;e2++){
     var kv = pv.events[e2];
     if (kv.type !== "kill") continue;
     var orb = previewKills.children[k++];
     orb.position.copy(kv.p);
+    orb.material.color.setHex(kv.head ? 0xFF6A4A : 0xD93B24);
+    var sc = (kv.head ? 1.15 : 1) * tPulse;
+    orb.scale.setScalar(sc);
     orb.visible = true;
   }
-  drawMiniMap(pv);
+  var frameTight = isFramePerfectAttempt(pv);
+  drawMiniMap(pv, frameTight);
   id("miniBox").classList.add("on");
 }
 
