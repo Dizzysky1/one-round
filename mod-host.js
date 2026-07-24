@@ -35,6 +35,76 @@
   var replaceBuiltins = urlFlag("modHost") === "1" || urlFlag("mods") === "1";
   var modsActive = false;
 
+  // Launcher postMessage allowlist. Same-origin always (dev.sh serves
+  // launcher + game together); add others with ?modHostOrigin=.
+  function buildAllowedOrigins() {
+    var out = [];
+    function add(o) {
+      if (!o || o === "null") return;
+      if (out.indexOf(o) < 0) out.push(o);
+    }
+    try {
+      add(location.origin);
+    } catch (e) {}
+    try {
+      var params = new URLSearchParams(location.search);
+      var list = params.getAll("modHostOrigin");
+      for (var i = 0; i < list.length; i++) {
+        var raw = list[i];
+        if (!raw) continue;
+        var parts = raw.split(",");
+        for (var j = 0; j < parts.length; j++) {
+          var p = parts[j].trim();
+          if (!p) continue;
+          try {
+            add(new URL(p).origin);
+          } catch (e2) {
+            add(p);
+          }
+        }
+      }
+    } catch (e3) {}
+    return out;
+  }
+  var allowedOrigins = buildAllowedOrigins();
+
+  function originAllowed(origin) {
+    if (!origin || origin === "null") return false;
+    for (var i = 0; i < allowedOrigins.length; i++) {
+      if (allowedOrigins[i] === origin) return true;
+    }
+    return false;
+  }
+
+  function parentTargetOrigins() {
+    var targets = [];
+    function add(o) {
+      if (!originAllowed(o)) return;
+      if (targets.indexOf(o) < 0) targets.push(o);
+    }
+    try {
+      if (location.ancestorOrigins) {
+        for (var i = 0; i < location.ancestorOrigins.length; i++) {
+          add(location.ancestorOrigins[i]);
+        }
+      }
+    } catch (e) {}
+    try {
+      if (document.referrer) add(new URL(document.referrer).origin);
+    } catch (e2) {}
+    try {
+      add(location.origin);
+    } catch (e3) {}
+    return targets;
+  }
+
+  function postTo(source, payload, targetOrigin) {
+    if (!source || !targetOrigin || !originAllowed(targetOrigin)) return;
+    try {
+      source.postMessage(payload, targetOrigin);
+    } catch (e) {}
+  }
+
   function caps() {
     return mode === "online" ? CAPS_ONLINE.slice() : CAPS_OFFLINE.slice();
   }
@@ -142,12 +212,15 @@
         global.dispatchEvent(new CustomEvent("oneround-modhost-ready"));
       } catch (e) {}
       if (global.parent && global.parent !== global) {
-        try {
-          global.parent.postMessage(
-            { type: "oneround-modhost-ready", capabilities: caps(), mode: mode },
-            "*"
-          );
-        } catch (e2) {}
+        var readyMsg = {
+          type: "oneround-modhost-ready",
+          capabilities: caps(),
+          mode: mode
+        };
+        var targets = parentTargetOrigins();
+        for (var ti = 0; ti < targets.length; ti++) {
+          postTo(global.parent, readyMsg, targets[ti]);
+        }
       }
       return Host;
     },
@@ -306,19 +379,18 @@
   };
 
   global.addEventListener("message", function (ev) {
+    if (!originAllowed(ev.origin)) return;
     var data = ev.data;
     if (!data || typeof data !== "object") return;
     if (data.type === "oneround-modhost-config") {
       if (data.mode === "online" || data.mode === "offline") mode = data.mode;
       if (typeof data.replaceBuiltins === "boolean") replaceBuiltins = data.replaceBuiltins;
       if (typeof data.modsActive === "boolean") Host.setModsActive(data.modsActive);
-      try {
-        ev.source &&
-          ev.source.postMessage(
-            { type: "oneround-modhost-config-ack", capabilities: caps(), mode: mode },
-            "*"
-          );
-      } catch (e) {}
+      postTo(
+        ev.source,
+        { type: "oneround-modhost-config-ack", capabilities: caps(), mode: mode },
+        ev.origin
+      );
     }
   });
 
