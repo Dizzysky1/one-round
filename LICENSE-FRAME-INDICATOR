@@ -1,0 +1,30 @@
+Frame-Perfect Indicator Contribution License
+============================================
+
+Copyright (c) 2026 Aidiotic (https://github.com/Aidiotic)
+
+This license covers only the Frame-Perfect Indicator contribution: the
+tracer-minimap timing-window detection and FRAME panel indicator
+introduced by the author in this repository (including related CSS/HTML/JS
+for that system). It does not claim copyright over the rest of ONE ROUND
+authored by others, nor over the separate Tracer Map contribution covered
+by LICENSE-TRACER-MAP.
+
+Permission is granted to include this contribution in ONE ROUND
+(https://github.com/Dizzysky1/one-round) as merged from the author's
+pull request(s).
+
+Modification restriction
+------------------------
+No one may modify, rewrite, reimplement, or replace this Frame-Perfect
+Indicator contribution (including changes that alter its timing probe or
+FRAME panel behavior) except:
+
+  1. the copyright holder (Aidiotic), or
+  2. a person acting with the copyright holder's prior written permission.
+
+Use and distribution of an unmodified copy of this contribution, as
+merged, is allowed as part of ONE ROUND. Derivative changes without
+permission from Aidiotic are not authorized.
+
+If you need a change, open an issue or ask Aidiotic to author it.
