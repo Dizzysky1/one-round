@@ -78,8 +78,11 @@ merge-by-callsign) and the Duel lobby goes live.
 
 ## License
 
-The game is MIT. The plan-view tracer map carries an additional contribution
-notice in-tree — see [`LICENSE-TRACER-MAP`](LICENSE-TRACER-MAP) (© 2026
-Aidiotic). [`LICENSE-FRAME-INDICATOR`](LICENSE-FRAME-INDICATOR) is retained
-for reference; the FRAME timing indicator it covers is not part of this
-version.
+The game is MIT. Additional contribution notices in-tree (© 2026 Aidiotic):
+
+- [`LICENSE-TRACER-MAP`](LICENSE-TRACER-MAP) — plan-view tracer map
+- [`LICENSE-STACKABLE-CHALLENGES`](LICENSE-STACKABLE-CHALLENGES) — stackable
+  challenge modes and difficulty-scaled credit rewards (attribution;
+  continued development allowed, unlike Tracer Map)
+- [`LICENSE-FRAME-INDICATOR`](LICENSE-FRAME-INDICATOR) — retained for
+  reference; the FRAME timing indicator it covers is not part of this version
