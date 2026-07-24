@@ -35,6 +35,21 @@
     transition:opacity .5s ease-out}
   .flash.on{opacity:.38;transition:none}
 
+  /* ricochet-kill chain readout */
+  .chain{position:absolute;left:50%;top:24%;transform:translate(-50%,-50%);
+    font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.12em;
+    opacity:0;pointer-events:none}
+  .chain.on{animation:chpop .34s ease-out forwards}
+  @keyframes chpop{0%{opacity:1;transform:translate(-50%,-50%) scale(1.5)}
+    60%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:1}}
+
+  /* crosshair settle ring + armed dot */
+  .cross s{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;
+    border:1px solid var(--slate);border-radius:50%;opacity:0;transform:scale(1.6);
+    transition:transform .5s ease-out,opacity .3s}
+  .cross.set s{opacity:.5;transform:scale(1)}
+  .cross u.armed{background:var(--volt)}
+
   /* ---- HUD ---- */
   .hud{position:fixed;inset:0;pointer-events:none;z-index:5;
        font-variant-numeric:tabular-nums}
@@ -413,7 +428,7 @@
     <div class="lab">Score</div>
     <div class="big sc" id="hScore">0</div>
     <div class="sub">Best <b id="hBest">0</b></div>
-    <div class="sub">Spare rounds <b id="hRetry">0</b></div>
+    <div class="sub" id="hRetryRow" style="display:none">Spare rounds <b id="hRetry">0</b></div>
   </div>
 
   <div class="panel bl" id="logBox">
@@ -439,10 +454,11 @@
     <b>DUEL</b><span id="dhRange"></span><span id="dhScore"></span><em id="dhClock"></em>
   </div>
   <button class="gear" id="bGear">Settings</button>
-  <div class="cross" id="cross"><i></i><i></i><i></i><i></i><u></u></div>
+  <div class="cross" id="cross"><i></i><i></i><i></i><i></i><u></u><s></s></div>
   <div class="hm" id="hitmark"><b></b><b></b><b></b><b></b></div>
   <div class="strip" id="strip">click to take aim</div>
   <div class="toast" id="toast"></div>
+  <div class="chain" id="chain"></div>
   <div class="banner" id="banner"><div class="n" id="bannerN">01</div><div class="t" id="bannerT"></div></div>
 </div>
 
@@ -791,6 +807,38 @@ function ac(){
   }
   if (AC.state === "suspended") AC.resume();
   return AC;
+}
+// flight drone: a low bed that falls with the slowmo, cut on resolution —
+// the held breath under the round's flight
+var droneOsc = null, droneGain = null;
+function droneStart(){
+  if (!S.opt.sound || droneOsc) return;
+  var c = ac(); if (!c) return;
+  try {
+    droneOsc = c.createOscillator();
+    droneGain = c.createGain();
+    var df = c.createBiquadFilter();
+    df.type = "lowpass"; df.frequency.value = 600;
+    droneOsc.type = "sawtooth";
+    droneOsc.frequency.setValueAtTime(110, c.currentTime);
+    droneOsc.frequency.exponentialRampToValueAtTime(55, c.currentTime + 2.2);
+    droneGain.gain.setValueAtTime(0.0001, c.currentTime);
+    droneGain.gain.exponentialRampToValueAtTime(0.05, c.currentTime + 0.18);
+    droneOsc.connect(df); df.connect(droneGain); droneGain.connect(master);
+    droneOsc.start();
+  } catch(e){ droneOsc = droneGain = null; }
+}
+function droneStop(){
+  if (!droneOsc) return;
+  var c = AC, o = droneOsc, gn = droneGain;
+  droneOsc = droneGain = null;
+  if (!c){ try { o.stop(); } catch(e){} return; }
+  try {
+    gn.gain.cancelScheduledValues(c.currentTime);
+    gn.gain.setValueAtTime(Math.max(0.0001, gn.gain.value), c.currentTime);
+    gn.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.22);
+    o.stop(c.currentTime + 0.28);
+  } catch(e){ try { o.stop(); } catch(e2){} }
 }
 function tone(f0,f1,dur,type,vol,delay){
   if (!S.opt.sound) return;
@@ -1341,6 +1389,10 @@ function hideTrail(){ for (var i=0;i<TRAILS;i++) trailPool[i].visible=false; tra
 
 var bulletMesh = new THREE.Mesh(new THREE.SphereGeometry(1,20,14), MAT.bullet);
 bulletMesh.visible = false; scene.add(bulletMesh);
+var muzzleFlash = new THREE.Sprite(new THREE.SpriteMaterial({ map:texGlow,
+  color:0xFFE0A8, transparent:true, opacity:0, depthWrite:false, toneMapped:false }));
+muzzleFlash.visible = false; scene.add(muzzleFlash);
+var flashLife = 0;
 var bulletGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:texGlow, transparent:true, opacity:0.85, depthWrite:false }));
 bulletGlow.scale.setScalar(1.5); bulletGlow.visible = false; scene.add(bulletGlow);
 
@@ -1638,7 +1690,7 @@ function solvePath(origin, dir, ghost){
 // ======================================================================
 //  FIRING & PLAYBACK
 // ======================================================================
-var shot = null, shake = 0, flashT = 0, hitStop = 0, fovKick = 0;
+var shot = null, shake = 0, flashT = 0, hitStop = 0, fovKick = 0, failDrain = 0;
 
 function snapshot(){
   return enemies.map(function(e){
@@ -1670,13 +1722,19 @@ function fire(){
   bulletGlow.scale.setScalar(S.stats.radius*7);
   hideTrail();
   logClear();
-  logLine("00", "muzzle", pad2(S.stats.bounces) + " ric");
+  logLine("00", "muzzle", pad2(S.stats.bounces) + " ready");
   setStrip("round in flight", "hot");
   cross.classList.add("hide");
   logBox.classList.add("on");
   sfx.fire();
+  droneStart();
   shake = 0.4; flashT = 0.08;
   var mz = muzzle();
+  muzzleFlash.position.copy(mz);
+  muzzleFlash.scale.setScalar(1.6);
+  muzzleFlash.material.opacity = 1; muzzleFlash.visible = true; flashLife = 0.08;
+  fovKick = 6;
+  shot.chain = 0;
   popLight(mz, 0xFFD9A0, 9, 14);
   popSparks(mz, dir, 16, 0xFFD08A, 1.5);
   popSmoke(mz.clone().addScaledVector(dir, 0.3), 5, 0.9, 1.5);
@@ -1740,6 +1798,16 @@ function playback(dt){
         S.bestBank = Math.max(S.bestBank, ev.nb);
         shake = Math.max(shake, ev.head ? 0.5 : 0.34);
         flashT = 0.05;
+        // hit-stop: freeze the playback clock for a beat so the hit lands
+        hitStop = Math.max(hitStop, ev.head ? 0.07 : 0.045);
+        shot.chain = (shot.chain||0) + 1;
+        if (shot.chain >= 2){
+          var ce = id("chain");
+          ce.textContent = "CHAIN ×" + shot.chain;
+          ce.style.color = shot.chain >= 3 ? "#D93B24" : "#14161A";
+          ce.classList.remove("on"); void ce.offsetWidth; ce.classList.add("on");
+          tone(520 + shot.chain*90, 520 + shot.chain*90, 0.09, "triangle", 0.09);
+        }
         toastMsg((ev.frag ? "shrapnel" : (ev.head ? "headshot" : (ev.armored ? "armour split" : "target down"))) +
                  "  +" + gain,
                  ev.nb ? "after " + ev.nb + " ricochet" + (ev.nb===1?"":"s") + " &middot; x" + mult.toFixed(1) : "direct line",
@@ -1753,6 +1821,7 @@ function playback(dt){
       popLight(ev.p, 0x2A2E36, 3, 9);
       addDecal(ev.p, ev.n, 1.7);
       sfx.sink(); shake = Math.max(shake,0.3);
+      hitStop = Math.max(hitStop, 0.06);
       logLine(pad2(logCount+1), "absorbed", "dead", "");
     } else if (ev.type === "stop"){
       burst(ev.p, 0x8A8478, 10, 0.5, 0.5);
@@ -1795,6 +1864,7 @@ function faceName(n){
 function resolveShot(){
   if (S.phase !== "fly") return;
   S.phase = "resolve";
+  droneStop();
   var left = countAlive();
   var bonus = 0;
   if (left === 0){
@@ -1806,8 +1876,14 @@ function resolveShot(){
     toastMsg("range clear  +" + bonus,
              shot.spareBounce + " ricochet" + (shot.spareBounce===1?"":"s") + " unspent", "#1550D8");
     setStrip("range clear", "cool");
+    flashT = 0.12;                       // bone flash synced to the clear arpeggio
   } else {
     setStrip("round spent", "hot");
+    if (S.stats.retries <= 0 && !NET.matchLive){
+      // the run is over — cool the image down before the over-card
+      failDrain = 1;
+      tone(150, 40, 0.9, "sine", 0.09);
+    }
   }
   S.best = Math.max(S.best, S.score);
   refreshHUD();
@@ -1832,6 +1908,8 @@ function resolveShot(){
 function resetToAim(){
   S.phase = "aim";
   returning = true;
+  droneStop();
+  id("chain").classList.remove("on");
   bulletMesh.visible = false; bulletGlow.visible = false;
   hideTrail();
   shot = null; liveBounce = -1;
@@ -1867,6 +1945,7 @@ function refreshHUD(){
   hScore.textContent = S.score;
   hBest.textContent = Math.max(S.best, S.score);
   hRetry.textContent = S.stats.retries;
+  id("hRetryRow").style.display = S.stats.retries > 0 ? "" : "none";
   var alive = countAlive();
   pips(pTargets, alive, Math.max(1, enemies.length), "t");
   var b = liveBounce >= 0 ? liveBounce : S.stats.bounces;
@@ -1880,7 +1959,7 @@ function setStrip(text, cls){
 function aimStrip(){
   if (S.phase !== "aim") return;
   var msg = (touch.on || locked) ? "1 round chambered"
-          : dragLook ? "hold left mouse to aim \u00b7 space to fire"
+          : dragLook ? "hold left mouse \u00b7 space fires"
           : "click to take aim";
   setStrip(msg, "");
 }
@@ -1903,7 +1982,7 @@ function showBanner(){
   bannerN.textContent = pad2(S.level);
   var n = enemies.length;
   bannerT.textContent = curMap.name.toUpperCase() + " \u00b7 " + n + (n===1?" target":" targets") +
-                        " \u00b7 " + S.stats.bounces + " ricochet";
+                        " \u00b7 " + S.stats.bounces + " ricochet" + (S.stats.bounces===1?"":"s");
   banner.classList.remove("on"); void banner.offsetWidth; banner.classList.add("on");
 }
 
@@ -2005,7 +2084,9 @@ function drawElevation(canvas, sh){
 }
 
 // ---------------------------------------------------------- shot plot
-function drawPlot(canvas, sh, snap){
+function drawPlot(canvas, sh, snap, prog){
+  if (prog === undefined) prog = 1;
+  var progDist = sh ? (sh.length||0)*prog : 0;
   var g = canvas.getContext("2d"), W = canvas.width, H = canvas.height, pad = 22;
   var sc = Math.min((W-pad*2)/ROOM.w, (H-pad*2)/ROOM.d);
   function X(x){ return W/2 + x*sc; }
@@ -2033,13 +2114,25 @@ function drawPlot(canvas, sh, snap){
   if (sh && sh.pts.length > 1){
     g.strokeStyle = "#1550D8"; g.lineWidth = 2; g.lineJoin = "round";
     g.beginPath(); g.moveTo(X(sh.pts[0].x), Y(sh.pts[0].z));
-    for (var p=1;p<sh.pts.length;p++) g.lineTo(X(sh.pts[p].x), Y(sh.pts[p].z));
+    for (var p=1;p<sh.pts.length;p++){
+      // replay: stroke only up to the travelled distance, splitting the
+      // segment the front sits in
+      if (prog < 1 && sh.cum && sh.cum[p] > progDist){
+        var pa = sh.pts[p-1], pb = sh.pts[p];
+        var segLen = sh.cum[p]-sh.cum[p-1];
+        var pf = segLen > 1e-6 ? (progDist - sh.cum[p-1])/segLen : 0;
+        g.lineTo(X(pa.x+(pb.x-pa.x)*pf), Y(pa.z+(pb.z-pa.z)*pf));
+        break;
+      }
+      g.lineTo(X(sh.pts[p].x), Y(sh.pts[p].z));
+    }
     g.stroke();
-    // bounce markers
+    // bounce markers pop in as the line reaches them
     var num = 0;
     for (var e=0;e<sh.events.length;e++){
       var ev = sh.events[e];
       if (ev.type!=="bounce" && ev.type!=="pad") continue;
+      if (prog < 1 && ev.at > progDist) break;
       num++;
       g.fillStyle = ev.type==="pad" ? "#E0912A" : "#1550D8";
       g.beginPath(); g.arc(X(ev.p.x), Y(ev.p.z), 5.5, 0, 6.2832); g.fill();
@@ -2051,10 +2144,15 @@ function drawPlot(canvas, sh, snap){
     g.fillStyle = "#14161A";
     g.beginPath(); g.arc(X(sh.pts[0].x), Y(sh.pts[0].z), 4, 0, 6.2832); g.fill();
   }
-  // targets
+  // targets — during a replay a kill's X only lands once the line arrives
+  var killAt = {};
+  if (sh && prog < 1)
+    for (var ke=0; ke<sh.events.length; ke++)
+      if (sh.events[ke].type === "kill") killAt[sh.events[ke].i] = sh.events[ke].at;
   if (snap){
     for (var t=0;t<snap.length;t++){
       var s = snap[t], live = enemies[t] && enemies[t].alive;
+      if (!live && prog < 1 && killAt[t] !== undefined && killAt[t] > progDist) live = true;
       g.lineWidth = 2;
       if (live){
         g.strokeStyle = "#6B7079";
@@ -2071,6 +2169,18 @@ function drawPlot(canvas, sh, snap){
   g.fillStyle = "rgba(20,22,26,.35)"; g.font = "8px ui-monospace, monospace";
   g.textAlign="left"; g.textBaseline="alphabetic";
   g.fillText("PLAN VIEW \u00b7 " + ROOM.w + "M \u00d7 " + ROOM.d + "M", 4, H-5);
+}
+// Replay the shot onto the debrief plot over ~0.9s instead of stamping
+// the finished diagram \u2014 the same drawing, arriving the way it was fired.
+function animatePlot(canvas, sh, snap, veilId){
+  if (reduceMotion || !sh){ drawPlot(canvas, sh, snap, 1); return; }
+  var t0 = performance.now();
+  (function step(){
+    var p = Math.min(1, (performance.now()-t0)/900);
+    drawPlot(canvas, sh, snap, p);
+    if (p < 1 && (performance.now()-t0 < 200 || id(veilId).classList.contains("on")))
+      requestAnimationFrame(step);
+  })();
 }
 function tallyHTML(rows){
   return rows.map(function(r){
@@ -2148,7 +2258,7 @@ function openUpgrade(bonus){
   var cleared = S.level-1;
   uKick.textContent = "Range " + pad2(cleared) + " cleared" + (bonus ? "  \u00b7  +"+bonus+" bonus" : "");
   uPlotId.textContent = curMap.name.toUpperCase() + " \u00b7 RG-" + pad2(cleared);
-  drawPlot(id("uPlot"), shot, shot ? shot.snap : null);
+  animatePlot(id("uPlot"), shot, shot ? shot.snap : null, "vUpgrade");
   drawElevation(id("uElev"), shot);
   var padHits = shot ? shot.events.filter(function(e){return e.type==="pad";}).length : 0;
   uTally.innerHTML = tallyHTML([
@@ -2177,16 +2287,40 @@ function openUpgrade(bonus){
                   '<div class="pdelta"><s>'+d[0]+'</s><span>\u2192</span><u>'+d[1]+'</u></div>' +
                   '<div class="pfx">'+fx+'</div>';
     b.onclick = function(){
+      if (uPicked) return;             // one requisition per range
+      uPicked = true;
       sfx.ui();
-      u.apply(); taken[u.id] = true;
-      vUpgrade.classList.remove("on");
-      buildLevel(); resetToAim();
+      u.apply(); taken[u.id] = true;   // apply NOW — the stamp is only theatre
+      var stamp = document.createElement("div");
+      stamp.textContent = "REQUISITIONED";
+      stamp.style.cssText = "position:absolute;inset:0;display:grid;place-items:center;"+
+        "font:700 22px var(--mono);letter-spacing:.28em;color:#D93B24;"+
+        "transform:rotate(-4deg);pointer-events:none;background:rgba(245,243,238,.55)";
+      b.style.position = "relative"; b.appendChild(stamp);
+      tone(180, 60, 0.18, "square", 0.12);
+      setTimeout(function(){
+        vUpgrade.classList.remove("on");
+        buildLevel(); resetToAim();
+      }, reduceMotion ? 0 : 340);
     };
     uPicks.appendChild(b);
   });
+  uPicked = false;
   vUpgrade.classList.add("on");
 }
+var uPicked = false;
 
+// closest approach of the solved path to a point, in the floor plane
+function closestApproach(sh, x, z){
+  var best = 1e9;
+  for (var i=1;i<sh.pts.length;i++){
+    var a = sh.pts[i-1], b = sh.pts[i];
+    var dx = b.x-a.x, dz = b.z-a.z, L = dx*dx + dz*dz;
+    var t = L > 1e-6 ? clamp(((x-a.x)*dx + (z-a.z)*dz)/L, 0, 1) : 0;
+    best = Math.min(best, hyp2(a.x + dx*t - x, a.z + dz*t - z));
+  }
+  return best;
+}
 function gameOver(left){
   S.phase = "over";
   releasePointer();
@@ -2206,13 +2340,27 @@ function gameOver(left){
                       reason === "pierce" ? "Out of pierce" :
                       killed ? "Not enough" : "Missed") + "<em>.</em>";
   oKick.textContent = "Round spent \u00b7 range " + pad2(S.level);
+  // near-miss telemetry: how close did the final round pass a survivor?
+  var graze = "";
+  if (shot && shot.pts && shot.pts.length > 1){
+    var bestGap = 1e9, gi = 0, live = 0;
+    for (var gt=0; gt<enemies.length; gt++){
+      if (!enemies[gt].alive) continue;
+      live++;
+      var gap = closestApproach(shot, enemies[gt].pos.x, enemies[gt].pos.z);
+      if (gap < bestGap){ bestGap = gap; gi = live; }
+    }
+    if (bestGap < 0.7)
+      graze = "<br>The round passed target " + gi + " by <b>" +
+              bestGap.toFixed(2) + "&nbsp;m</b> — that was the shot.";
+  }
   oBody.innerHTML = left + (left===1?" target":" targets") + " still standing when the round died" +
     (reason === "sink" ? ", swallowed by an absorber panel." :
-     reason === "pierce" ? ", with the round's pierce used up." : ".") +
+     reason === "pierce" ? ", with the round's pierce used up." : ".") + graze +
     "<br><br>Final score <b>" + S.score + "</b> across <b>" + S.ranges + "</b> cleared " +
     (S.ranges===1?"range":"ranges") + ".";
   oPlotId.textContent = curMap.name.toUpperCase() + " \u00b7 RG-" + pad2(S.level);
-  drawPlot(id("oPlot"), shot, shot ? shot.snap : null);
+  animatePlot(id("oPlot"), shot, shot ? shot.snap : null, "vOver");
   drawElevation(id("oElev"), shot);
   oTally.innerHTML = tallyHTML([
     ["Credits", "+" + S.score.toLocaleString(), true],
@@ -2519,6 +2667,7 @@ id("oFov").oninput = function(){ S.opt.fov = +this.value; saveGame(); };
 //  RUN CONTROL
 // ======================================================================
 function startRun(){
+  failDrain = 0;
   S.level = 1; S.score = 0; S.ranges = 0; S.runKills = 0; S.runBounces = 0; S.bestBank = 0;
   S.stats = freshStats(); taken = {};
   S.bestHit = 0; liveBounce = -1;
@@ -2545,6 +2694,7 @@ function hideTracerPreview(){
   hidePreviewDots();
   id("miniBox").classList.remove("on");
   lastPreview = null; pvSig = "";   // drop the idle-aim cache
+  if (crossDot) crossDot.classList.remove("armed");
 }
 function writePreviewLine(geo, line, pts, cap){
   var arr = geo.attributes.position.array;
@@ -2631,6 +2781,7 @@ function drawMiniMap(pv){
   id("miniStat").textContent = kills + " hit · " + bounces + " ric";
 }
 var previewTick = 0;
+var crossDot = document.querySelector("#cross u");
 function updatePreview(){
   // idle-aim cache: identical inputs produce an identical solve, so skip the
   // re-solve and the geometry + minimap redraw. Any patrolling target moves
@@ -2673,6 +2824,7 @@ function updatePreview(){
   }
   drawMiniMap(pv);
   id("miniBox").classList.add("on");
+  crossDot.classList.toggle("armed", pv.kills > 0);   // this line kills
 }
 
 // ======================================================================
@@ -3687,7 +3839,8 @@ function duelRange(cur){
   NET.range = cur.range; NET.fired = false;
   NET.startAt = cur.startAt || 0; NET.deadline = cur.deadline || 0;
   NET.winsNeeded = cur.winsNeeded || 3;
-  if (first){ S.score = 0; S.ranges = 0; S.runKills = 0; S.bestBank = 0; NET.myWins = 0; NET.opWins = 0; }
+  if (first){ S.score = 0; S.ranges = 0; S.runKills = 0; S.bestBank = 0;
+              NET.myWins = 0; NET.opWins = 0; failDrain = 0; }
   NET.scoreBase = S.score;
   showVeil(null);
   buildDuelLevel(cur.seed, cur.mapId, cur.level, cur.stats);
@@ -3973,6 +4126,11 @@ function renderFrame(raw){
   u.uRadial.value = reduceMotion ? 0 : slow*0.9;
   u.uCool.value = slow;
   u.uVig.value = 0.8 + slow*0.35;
+  if (failDrain > 0){                       // run over: image cools to grey
+    failDrain = Math.max(0, failDrain - raw*1.3);
+    u.uCool.value = Math.max(u.uCool.value, failDrain);
+    u.uVig.value += failDrain*0.4;
+  }
   u.uBloom.value = 0.5 + slow*0.35;
   u.uGrain.value = S.opt.grain ? 0.030 : 0.0;
 
@@ -4051,6 +4209,7 @@ function movePlayer(dt){
     player.bob *= 0.86;
   }
   cross.classList.toggle("wide", sp > 1.4);
+  cross.classList.toggle("set", sp < 0.4);   // holding still: on plan
 }
 player.lastStep = 0;
 
@@ -4059,9 +4218,22 @@ function tick(){
   var raw = Math.min(clock.getDelta(), 0.05);
 
   var flying = S.phase === "fly" || S.phase === "resolve";
-  var wantScale = flying ? SLOWMO*(1-Math.min(0.55, S.stats.chrono*0.17)) : 1;
+  var wantScale = 1;
+  if (flying){
+    // ride faster on open straights, ease deep into slowmo approaching the
+    // next impact — an anticipation curve instead of flat slow motion.
+    // Reads only the solved events; the analytic result cannot desync.
+    var slowBase = SLOWMO*(1-Math.min(0.55, S.stats.chrono*0.17));
+    var prox = 1;
+    if (S.phase === "fly" && shot && shot.next < shot.events.length){
+      var evNext = shot.events[shot.next];
+      prox = clamp((evNext.at - shot.travelled)/4.0, 0, 1);
+    }
+    wantScale = slowBase*(0.42 + prox*prox*1.35);
+  }
   S.timeScale += (wantScale-S.timeScale)*(1-Math.pow(0.0015, raw));
   var dt = raw*S.timeScale;
+  if (hitStop > 0){ hitStop -= raw; dt = 0; }   // impact freeze-frame
 
   if (S.phase === "aim"){
     movePlayer(raw);
@@ -4109,6 +4281,10 @@ function tick(){
   if (flashT > 0){ flashT -= raw;
     if (!reduceMotion) flash.classList.add("on");   // photosensitivity: respect reduced motion
     if (flashT <= 0) flash.classList.remove("on"); }
+  if (flashLife > 0){ flashLife -= raw;
+    muzzleFlash.material.opacity = Math.max(0, flashLife/0.08);
+    muzzleFlash.scale.setScalar(1.6 + (1-flashLife/0.08)*1.2);
+    if (flashLife <= 0) muzzleFlash.visible = false; }
   cross.classList.toggle("hide", !(aimReady() && S.phase === "aim"));
   syncTouchUI();
 
