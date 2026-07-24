@@ -146,30 +146,24 @@
     14%{opacity:1;transform:translate(-50%,-50%) scale(1)}
     72%{opacity:1}100%{opacity:0}}
 
-  /* gear button */
-  .gear{position:absolute;bottom:288px;right:18px;pointer-events:auto;
+  /* gear button — sits above tracer map when it appears */
+  .gear{position:absolute;bottom:248px;right:18px;pointer-events:auto;
     background:var(--panel);border:1px solid var(--hair);color:var(--slate);cursor:pointer;
     font-family:var(--mono);font-size:8.5px;letter-spacing:.22em;text-transform:uppercase;
     padding:8px 13px}
   .gear:hover{color:var(--ink);border-color:var(--ink)}
 
-  /* minimap */
-  .mm{position:absolute;right:18px;bottom:18px;padding:9px 9px 7px;background:var(--panel);
-    border:1px solid var(--hair);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
-  .mm canvas{display:block;width:196px;height:196px;background:var(--paper);
-    border:1px solid var(--hair)}
-  .mm .mmh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;gap:10px}
-  .mm .mmh b{font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);font-weight:600}
-  .mm .mmh span{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate)}
-  .mm .mmh span.live{color:var(--volt)}
-  .mm .legend{margin-top:7px;gap:8px}
-  .mm .legend span{font-size:7.5px}
-  .mm .legend i{width:7px;height:7px;margin-right:3px}
-  .mm.off{display:none}
-  body.touch .mm{right:16px;bottom:auto;top:calc(126px + env(safe-area-inset-top));padding:6px}
-  body.touch .mm canvas{width:126px;height:126px}
-  body.touch .mm .legend{display:none}
-  @media(max-width:560px){.mm canvas{width:150px;height:150px}.mm .legend{display:none}}
+  /* tracer map (earned with Tracer Sight)
+     Copyright (c) 2026 Aidiotic — see LICENSE-TRACER-MAP.
+     Modifications only by Aidiotic or with prior written permission. */
+  .br{bottom:16px;right:16px;padding:10px 11px 11px;opacity:0;transition:opacity .18s;pointer-events:none}
+  .br.on{opacity:1}
+  .br .cardhead{margin-bottom:7px}
+  .br canvas{display:block;width:196px;height:196px;background:var(--paper);border:1px solid var(--hair)}
+  .br .legend{margin-top:7px;gap:7px}
+  .br .legend span{font-size:7.5px}
+  body.touch .br{right:auto;left:16px;bottom:calc(24px + env(safe-area-inset-bottom))}
+  body.touch .br canvas{width:140px;height:140px}
 
   /* ---- touch controls ---- */
   .tzone{position:fixed;inset:0;z-index:4;touch-action:none;display:none}
@@ -372,6 +366,7 @@
   }
   @media(max-width:560px){
     .tl,.tr{padding:9px 11px}.big{font-size:22px}.gear{display:none}
+    .br canvas{width:148px;height:148px}
   }
   @media(prefers-reduced-motion:reduce){
     .grain{display:none}
@@ -410,9 +405,12 @@
     <div class="log" id="log"></div>
   </div>
 
-  <div class="mm" id="mm">
-    <div class="mmh"><b id="mmName">The Range</b><span class="lab" id="mmMode">layout</span></div>
-    <canvas id="mmC" width="392" height="392"></canvas>
+  <div class="panel br" id="miniBox">
+    <div class="cardhead">
+      <div class="lab">Tracer map</div>
+      <div class="lab" id="miniStat">—</div>
+    </div>
+    <canvas id="miniMap" width="392" height="392"></canvas>
     <div class="legend">
       <span><i style="background:#1550D8"></i>Path</span>
       <span><i style="background:#D93B24"></i>Kill</span>
@@ -596,7 +594,6 @@
       <div class="opt"><label>Invert vertical</label><button class="tog" id="oInv" data-on="0">Off</button></div>
       <div class="opt"><label>Sound</label><button class="tog" id="oSnd" data-on="1">On</button></div>
       <div class="opt"><label>Camera shake</label><button class="tog" id="oShake" data-on="1">On</button></div>
-      <div class="opt"><label>Minimap</label><button class="tog" id="oMap" data-on="1">On</button></div>
       <div class="opt"><label>Film grain</label><button class="tog" id="oGrain" data-on="1">On</button></div>
       <div class="opt"><label>Bloom &amp; lens effects</label><button class="tog" id="oFx" data-on="1">On</button></div>
       <div class="opt" id="optHaptic" style="display:none"><label>Vibration</label><button class="tog" id="oHap" data-on="1">On</button></div>
@@ -648,7 +645,7 @@ var S = {
   level:1, score:0, best:0, timeScale:1,
   runKills:0, runBounces:0, bestBank:0, ranges:0,
   stats:null,
-  opt:{ sens:21, fov:74, invert:false, sound:true, shake:!reduceMotion, grain:!reduceMotion, fx:true, haptic:true, minimap:true }
+  opt:{ sens:21, fov:74, invert:false, sound:true, shake:!reduceMotion, grain:!reduceMotion, fx:true, haptic:true }
 };
 function freshStats(){
   var b = { bounces:3, pierce:1, radius:0.17, guide:0, tracer:false, scope:false,
@@ -1220,40 +1217,38 @@ bulletGlow.scale.setScalar(1.5); bulletGlow.visible = false; scene.add(bulletGlo
 
 // The tracer draws through geometry on purpose — a bank shot you cannot see
 // the far half of is not information, it is a guess.
+// Tracer Map contribution © 2026 Aidiotic — LICENSE-TRACER-MAP (modifications
+// only by Aidiotic or with prior written permission).
 var PREVIEW_CAP = 900;
-function previewLine(mat, order){
-  var geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(PREVIEW_CAP*3),3));
-  var ln = new THREE.Line(geo, mat);
-  ln.renderOrder = order; ln.frustumCulled = false; ln.visible = false;
-  scene.add(ln);
-  return { line:ln, geo:geo };
-}
-var pvHalo = previewLine(new THREE.LineBasicMaterial({
-  color:0x7AA2FF, transparent:true, opacity:0.30, depthTest:false, depthWrite:false,
-  toneMapped:false }), 8);
-var pvDash = previewLine(new THREE.LineDashedMaterial({
+var previewGeo = new THREE.BufferGeometry();
+previewGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(PREVIEW_CAP*3),3));
+var preview = new THREE.Line(previewGeo, new THREE.LineDashedMaterial({
   color:0x1550D8, transparent:true, opacity:0.92, dashSize:0.55, gapSize:0.22,
-  depthTest:false, depthWrite:false, toneMapped:false }), 9);
-var previewHalo = pvHalo.line, previewHaloGeo = pvHalo.geo;
-var preview = pvDash.line, previewGeo = pvDash.geo;
-
+  depthTest:false, depthWrite:false, toneMapped:false }));
+preview.renderOrder = 9;
+preview.frustumCulled = false; preview.visible = false; scene.add(preview);
+var previewHaloGeo = new THREE.BufferGeometry();
+previewHaloGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(PREVIEW_CAP*3),3));
+var previewHalo = new THREE.Line(previewHaloGeo, new THREE.LineBasicMaterial({
+  color:0x7AA2FF, transparent:true, opacity:0.28, depthTest:false, depthWrite:false, toneMapped:false }));
+previewHalo.renderOrder = 8;
+previewHalo.frustumCulled = false; previewHalo.visible = false; scene.add(previewHalo);
 var previewDots = new THREE.Group(); scene.add(previewDots);
 (function(){
   var g = new THREE.RingGeometry(0.16,0.28,16);
   for (var i=0;i<36;i++){
     var m = new THREE.MeshBasicMaterial({ color:0x1550D8, transparent:true, opacity:0.85,
       side:THREE.DoubleSide, depthTest:false, depthWrite:false, toneMapped:false });
-    var r = new THREE.Mesh(g,m); r.renderOrder = 10; r.visible = false; previewDots.add(r);
+    var r = new THREE.Mesh(g,m); r.renderOrder = 10; r.visible=false; previewDots.add(r);
   }
 })();
 var previewKills = new THREE.Group(); scene.add(previewKills);
 (function(){
-  var g = new THREE.SphereGeometry(0.19, 12, 9);
+  var g = new THREE.SphereGeometry(0.18, 10, 8);
   for (var i=0;i<12;i++){
     var m = new THREE.MeshBasicMaterial({ color:0xD93B24, transparent:true, opacity:0.9,
       depthTest:false, depthWrite:false, toneMapped:false });
-    var sph = new THREE.Mesh(g,m); sph.renderOrder = 11; sph.visible = false; previewKills.add(sph);
+    var s = new THREE.Mesh(g,m); s.renderOrder = 11; s.visible=false; previewKills.add(s);
   }
 })();
 
@@ -1517,7 +1512,7 @@ function fire(){
   shot.travelled = 0; shot.next = 0; shot.seg = 1; shot.snap = snapshot();
   shot.startLevel = S.level;
   S.phase = "fly";
-  hideTracer();
+  hideTracerPreview();
   bulletMesh.visible = true; bulletGlow.visible = true;
   bulletMesh.scale.setScalar(S.stats.radius*1.5);
   bulletGlow.scale.setScalar(S.stats.radius*7);
@@ -1710,7 +1705,6 @@ function pips(el, filled, total, cls){
 function refreshHUD(){
   hLevel.textContent = pad2(S.level);
   updateTape();
-  refreshMiniHead();
   hScore.textContent = S.score;
   hBest.textContent = Math.max(S.best, S.score);
   hRetry.textContent = S.stats.retries;
@@ -1805,131 +1799,6 @@ function deltaFor(u){
     case "pads":   return [padsFor(S.level), padsFor(S.level)+1, "pads per range"];
     case "crit":   return [(st.crit*100).toFixed(0)+"%", ((st.crit+0.5)*100).toFixed(0)+"%", "head damage"];
     default:       return ["locked", "armed", "one-time fit"];
-  }
-}
-
-// ---------------------------------------------------------- minimap
-// Layout, targets and your own heading are always shown — this game is
-// about geometry, not hide and seek. The predicted ricochet line is the
-// part you have to earn, so it only draws with a tracer fitted.
-var mmEl = id("mm"), mmC = id("mmC"), mmName = id("mmName"), mmMode = id("mmMode");
-var mmG = mmC.getContext("2d"), mmTick = 0, lastPreview = null;
-
-function drawMini(){
-  if (!S.opt.minimap){ mmEl.classList.add("off"); return; }
-  mmEl.classList.remove("off");
-  var W = mmC.width, H = mmC.height, pad = 16;
-  var sc = Math.min((W-pad*2)/ROOM.w, (H-pad*2)/ROOM.d);
-  function X(x){ return W/2 + x*sc; }
-  function Y(z){ return H/2 + z*sc; }
-  var g = mmG, i;
-  g.clearRect(0,0,W,H);
-  g.fillStyle = "#F5F3EE"; g.fillRect(0,0,W,H);
-
-  // survey grid, then the room
-  g.strokeStyle = "rgba(20,22,26,.08)"; g.lineWidth = 1;
-  for (i=-5;i<=5;i++){
-    g.beginPath();
-    g.moveTo(X(i*5.5), Y(-ROOM.d/2)); g.lineTo(X(i*5.5), Y(ROOM.d/2));
-    g.moveTo(X(-ROOM.w/2), Y(i*5.5)); g.lineTo(X(ROOM.w/2), Y(i*5.5));
-    g.stroke();
-  }
-  g.strokeStyle = "#14161A"; g.lineWidth = 2;
-  g.strokeRect(X(-ROOM.w/2), Y(-ROOM.d/2), ROOM.w*sc, ROOM.d*sc);
-
-  for (var b=0;b<blocks.length;b++){
-    var bk = blocks[b];
-    g.fillStyle = bk.kind==="pad" ? "rgba(224,145,42,.62)"
-               : bk.kind==="sink" ? "rgba(20,22,26,.88)" : "rgba(20,22,26,.16)";
-    g.fillRect(X(bk.min.x), Y(bk.min.z), (bk.max.x-bk.min.x)*sc, (bk.max.z-bk.min.z)*sc);
-  }
-
-  // the round's line — a soft halo under a hard stroke, so it reads over cover
-  var path = null, upto = -1, src = [];
-  if (S.phase === "fly" && shot){ path = shot.pts; upto = shot.seg; src = shot.events; }
-  else if (S.stats.tracer && lastPreview){ path = lastPreview.pts; src = lastPreview.events; }
-
-  if (path && path.length > 1){
-    var last = upto >= 0 ? Math.min(upto, path.length-1) : path.length-1;
-    function trace(){
-      g.beginPath(); g.moveTo(X(path[0].x), Y(path[0].z));
-      for (var q=1;q<=last;q++) g.lineTo(X(path[q].x), Y(path[q].z));
-      if (upto >= 0 && bulletMesh.visible) g.lineTo(X(bulletMesh.position.x), Y(bulletMesh.position.z));
-    }
-    g.lineJoin = "round"; g.lineCap = "round";
-    g.strokeStyle = "rgba(122,162,255,.55)"; g.lineWidth = 6; trace(); g.stroke();
-    g.strokeStyle = "#1550D8"; g.lineWidth = 2.5; trace(); g.stroke();
-
-    for (var e=0;e<src.length;e++){
-      var ev = src[e];
-      if (upto >= 0 && shot && ev.at > shot.travelled) continue;
-      var ex = X(ev.p.x), ez = Y(ev.p.z);
-      if (ev.type === "bounce" || ev.type === "pad"){
-        g.fillStyle = ev.type === "pad" ? "#E0912A" : "#1550D8";
-        g.beginPath(); g.arc(ex, ez, 5, 0, 6.2832); g.fill();
-        g.strokeStyle = "rgba(245,243,238,.9)"; g.lineWidth = 1.4; g.stroke();
-      } else if (ev.type === "kill"){
-        g.strokeStyle = "#D93B24"; g.lineWidth = 3; g.lineCap = "butt";
-        g.beginPath();
-        g.moveTo(ex-6, ez-6); g.lineTo(ex+6, ez+6);
-        g.moveTo(ex+6, ez-6); g.lineTo(ex-6, ez+6);
-        g.stroke(); g.lineCap = "round";
-      } else if (ev.type === "sink" || ev.type === "stop"){
-        g.fillStyle = "#14161A";
-        g.beginPath(); g.arc(ex, ez, 5, 0, 6.2832); g.fill();
-      }
-    }
-  }
-
-  // targets: a reticle while standing, a faded cross once down
-  for (var t=0;t<enemies.length;t++){
-    var en = enemies[t], tx = X(en.pos.x), tz = Y(en.pos.z);
-    if (en.alive){
-      g.strokeStyle = en.armored ? "#6E7076" : "#D93B24";
-      g.lineWidth = 2.4;
-      g.beginPath(); g.arc(tx, tz, 6.5, 0, 6.2832); g.stroke();
-      g.beginPath();
-      g.moveTo(tx-9.5, tz); g.lineTo(tx-3, tz);
-      g.moveTo(tx+3, tz); g.lineTo(tx+9.5, tz);
-      g.moveTo(tx, tz-9.5); g.lineTo(tx, tz-3);
-      g.moveTo(tx, tz+3); g.lineTo(tx, tz+9.5);
-      g.stroke();
-    } else {
-      g.strokeStyle = "rgba(107,112,121,.5)"; g.lineWidth = 2;
-      g.beginPath();
-      g.moveTo(tx-4.5, tz-4.5); g.lineTo(tx+4.5, tz+4.5);
-      g.moveTo(tx+4.5, tz-4.5); g.lineTo(tx-4.5, tz+4.5);
-      g.stroke();
-    }
-  }
-
-  // you, with a facing wedge and the exact line of aim
-  var px = X(player.pos.x), pz = Y(player.pos.z);
-  var a = Math.atan2(-Math.sin(player.yaw), -Math.cos(player.yaw));
-  g.fillStyle = "rgba(20,22,26,.14)";
-  g.beginPath(); g.moveTo(px,pz);
-  g.arc(px, pz, 34, a - Math.PI/2 - 0.40, a - Math.PI/2 + 0.40);
-  g.closePath(); g.fill();
-  var ad = aimDir();
-  g.strokeStyle = "#14161A"; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(px, pz);
-  g.lineTo(px + ad.x*sc*2.8, pz + ad.z*sc*2.8);
-  g.stroke();
-  g.fillStyle = "#14161A";
-  g.beginPath(); g.arc(px, pz, 4.5, 0, 6.2832); g.fill();
-  g.strokeStyle = "rgba(245,243,238,.9)"; g.lineWidth = 1.4; g.stroke();
-}
-function refreshMiniHead(){
-  if (typeof curMap !== "undefined" && curMap) mmName.textContent = curMap.name;
-  var pv = (S.phase === "fly" && shot) ? shot : (S.stats.tracer ? lastPreview : null);
-  if (pv){
-    var hits = 0;
-    for (var i=0;i<pv.events.length;i++) if (pv.events[i].type === "kill") hits++;
-    mmMode.textContent = hits + " hit \u00b7 " + pv.bounces + " ric";
-    mmMode.className = "lab live";
-  } else {
-    mmMode.textContent = "layout";
-    mmMode.className = "lab";
   }
 }
 
@@ -2472,7 +2341,6 @@ bindTog("oInv","invert"); bindTog("oSnd","sound"); bindTog("oShake","shake");
 bindTog("oGrain","grain", applyFxMode);
 bindTog("oFx","fx", applyFxMode);
 bindTog("oHap","haptic");
-bindTog("oMap","minimap");
 id("oSens").value = S.opt.sens;
 id("oSens").oninput = function(){ S.opt.sens = +this.value; saveGame(); };
 id("oFov").value = S.opt.fov;
@@ -2497,15 +2365,21 @@ updateDiag();
 
 // ======================================================================
 //  PREVIEW (tracer sight)
+//  © 2026 Aidiotic — LICENSE-TRACER-MAP (no third-party rewrites without OK)
 // ======================================================================
 function hidePreviewDots(){
   for (var i=0;i<previewDots.children.length;i++) previewDots.children[i].visible = false;
   for (var k=0;k<previewKills.children.length;k++) previewKills.children[k].visible = false;
 }
-var previewTick = 0;
-function writePreviewLine(geo, line, pts){
+function hideTracerPreview(){
+  preview.visible = false;
+  previewHalo.visible = false;
+  hidePreviewDots();
+  id("miniBox").classList.remove("on");
+}
+function writePreviewLine(geo, line, pts, cap){
   var arr = geo.attributes.position.array;
-  var n = Math.min(pts.length, PREVIEW_CAP);
+  var n = Math.min(pts.length, cap);
   for (var i=0;i<n;i++){
     arr[i*3] = pts[i].x; arr[i*3+1] = pts[i].y; arr[i*3+2] = pts[i].z;
   }
@@ -2515,35 +2389,104 @@ function writePreviewLine(geo, line, pts){
   if (line.computeLineDistances) line.computeLineDistances();
   line.visible = n > 1;
 }
-function hideTracer(){
-  preview.visible = false;
-  previewHalo.visible = false;
-  hidePreviewDots();
-  lastPreview = null;
-}
-function updatePreview(){
-  var pv = solvePath(muzzle(), aimDir(), false);
-  lastPreview = pv;
-  writePreviewLine(previewGeo, preview, pv.pts);
-  writePreviewLine(previewHaloGeo, previewHalo, pv.pts);
-  hidePreviewDots();
-  var d = 0, k = 0;
-  for (var e=0;e<pv.events.length;e++){
-    var ev = pv.events[e];
-    if ((ev.type === "bounce" || ev.type === "pad") && d < previewDots.children.length){
-      var ring = previewDots.children[d++];
-      ring.position.copy(ev.p).addScaledVector(ev.n, 0.03);
-      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), ev.n);
-      ring.material.color.setHex(ev.type === "pad" ? 0xE0912A : 0x1550D8);
-      ring.visible = true;
-    } else if (ev.type === "kill" && k < previewKills.children.length){
-      var orb = previewKills.children[k++];
-      orb.position.copy(ev.p);
-      orb.visible = true;
+function drawMiniMap(pv){
+  var canvas = id("miniMap"), g = canvas.getContext("2d");
+  var W = canvas.width, H = canvas.height, pad = 18;
+  var sc = Math.min((W-pad*2)/ROOM.w, (H-pad*2)/ROOM.d);
+  function X(x){ return W/2 + x*sc; }
+  function Y(z){ return H/2 + z*sc; }
+  g.clearRect(0,0,W,H);
+  g.fillStyle = "#F5F3EE"; g.fillRect(0,0,W,H);
+  g.strokeStyle = "rgba(20,22,26,.08)"; g.lineWidth = 1;
+  for (var i=-4;i<=4;i++){
+    g.beginPath(); g.moveTo(X(i*5.5), Y(-ROOM.d/2)); g.lineTo(X(i*5.5), Y(ROOM.d/2));
+    g.moveTo(X(-ROOM.w/2), Y(i*5.5)); g.lineTo(X(ROOM.w/2), Y(i*5.5)); g.stroke();
+  }
+  g.strokeStyle = "#14161A"; g.lineWidth = 2;
+  g.strokeRect(X(-ROOM.w/2), Y(-ROOM.d/2), ROOM.w*sc, ROOM.d*sc);
+  for (var b=0;b<blocks.length;b++){
+    var bk = blocks[b];
+    var bw = (bk.max.x-bk.min.x)*sc, bh = (bk.max.z-bk.min.z)*sc;
+    g.fillStyle = bk.kind==="pad" ? "rgba(224,145,42,.62)"
+               : bk.kind==="sink" ? "rgba(20,22,26,.88)" : "rgba(20,22,26,.16)";
+    g.fillRect(X(bk.min.x), Y(bk.min.z), bw, bh);
+  }
+  for (var t=0;t<enemies.length;t++){
+    var en = enemies[t]; if (!en.alive) continue;
+    g.strokeStyle = en.armored ? "#6E7076" : "#D93B24";
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(X(en.pos.x)-7, Y(en.pos.z)-7); g.lineTo(X(en.pos.x)+7, Y(en.pos.z)+7);
+    g.moveTo(X(en.pos.x)+7, Y(en.pos.z)-7); g.lineTo(X(en.pos.x)-7, Y(en.pos.z)+7);
+    g.stroke();
+  }
+  g.fillStyle = "#14161A";
+  g.beginPath(); g.arc(X(player.pos.x), Y(player.pos.z), 5, 0, 6.2832); g.fill();
+  var ad = aimDir();
+  g.strokeStyle = "#14161A"; g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(X(player.pos.x), Y(player.pos.z));
+  g.lineTo(X(player.pos.x + ad.x*2.4), Y(player.pos.z + ad.z*2.4));
+  g.stroke();
+
+  if (pv && pv.pts.length > 1){
+    g.strokeStyle = "rgba(122,162,255,.55)"; g.lineWidth = 6; g.lineJoin = "round";
+    g.beginPath(); g.moveTo(X(pv.pts[0].x), Y(pv.pts[0].z));
+    for (var p=1;p<pv.pts.length;p++) g.lineTo(X(pv.pts[p].x), Y(pv.pts[p].z));
+    g.stroke();
+    g.strokeStyle = "#1550D8"; g.lineWidth = 2.5;
+    g.beginPath(); g.moveTo(X(pv.pts[0].x), Y(pv.pts[0].z));
+    for (var p2=1;p2<pv.pts.length;p2++) g.lineTo(X(pv.pts[p2].x), Y(pv.pts[p2].z));
+    g.stroke();
+
+    for (var e=0;e<pv.events.length;e++){
+      var ev = pv.events[e];
+      if (ev.type === "bounce" || ev.type === "pad"){
+        g.fillStyle = ev.type === "pad" ? "#E0912A" : "#1550D8";
+        g.beginPath(); g.arc(X(ev.p.x), Y(ev.p.z), 5, 0, 6.2832); g.fill();
+      } else if (ev.type === "kill"){
+        g.strokeStyle = "#D93B24"; g.lineWidth = 3;
+        g.beginPath();
+        g.moveTo(X(ev.p.x)-6, Y(ev.p.z)-6); g.lineTo(X(ev.p.x)+6, Y(ev.p.z)+6);
+        g.moveTo(X(ev.p.x)+6, Y(ev.p.z)-6); g.lineTo(X(ev.p.x)-6, Y(ev.p.z)+6);
+        g.stroke();
+      } else if (ev.type === "sink" || ev.type === "stop"){
+        g.fillStyle = "#14161A";
+        g.beginPath(); g.arc(X(ev.p.x), Y(ev.p.z), 5.5, 0, 6.2832); g.fill();
+      }
     }
   }
+  var kills = pv ? pv.events.filter(function(ev){ return ev.type==="kill"; }).length : 0;
+  var bounces = pv ? pv.bounces : 0;
+  id("miniStat").textContent = kills + " hit \u00b7 " + bounces + " ric";
 }
-
+var previewTick = 0;
+function updatePreview(){
+  var pv = solvePath(muzzle(), aimDir(), false);
+  writePreviewLine(previewGeo, preview, pv.pts, PREVIEW_CAP);
+  writePreviewLine(previewHaloGeo, previewHalo, pv.pts, PREVIEW_CAP);
+  hidePreviewDots();
+  var d = 0;
+  for (var e=0;e<pv.events.length && d<previewDots.children.length;e++){
+    var ev = pv.events[e];
+    if (ev.type !== "bounce" && ev.type !== "pad") continue;
+    var ring = previewDots.children[d++];
+    ring.position.copy(ev.p).addScaledVector(ev.n, 0.03);
+    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), ev.n);
+    ring.material.color.setHex(ev.type === "pad" ? 0xE0912A : 0x1550D8);
+    ring.visible = true;
+  }
+  var k = 0;
+  for (var e2=0;e2<pv.events.length && k<previewKills.children.length;e2++){
+    var kv = pv.events[e2];
+    if (kv.type !== "kill") continue;
+    var orb = previewKills.children[k++];
+    orb.position.copy(kv.p);
+    orb.visible = true;
+  }
+  drawMiniMap(pv);
+  id("miniBox").classList.add("on");
+}
 
 // ======================================================================
 //  EXTRA TEXTURES
@@ -3411,9 +3354,9 @@ function renderMini(list){
 function bootMeta(){
   loadGame().then(function(){
     if (!SAVE.callsign) SAVE.callsign = "";
-    ["oInv","oSnd","oShake","oGrain","oFx","oHap","oMap"].forEach(function(x){
+    ["oInv","oSnd","oShake","oGrain","oFx","oHap"].forEach(function(x){
       var key = { oInv:"invert", oSnd:"sound", oShake:"shake", oGrain:"grain", oFx:"fx",
-                  oHap:"haptic", oMap:"minimap" }[x];
+                  oHap:"haptic" }[x];
       var el = id(x); if (!el) return;
       el.dataset.on = S.opt[key] ? "1" : "0";
       el.textContent = S.opt[key] ? "On" : "Off";
@@ -3694,7 +3637,7 @@ function tick(){
     }
     if (S.stats.tracer && aimReady()){
       if (++previewTick % 2 === 0) updatePreview();
-    } else hideTracer();
+    } else { hideTracerPreview(); }
   }
 
   if (S.phase === "fly" && shot) playback(dt);
@@ -3713,7 +3656,6 @@ function tick(){
     if (pt.life <= 0) pt.mesh.visible = false;
   }
 
-  if (++mmTick % 2 === 0) drawMini();
   var wantGear = (S.phase === "aim" || S.phase === "opts");
   if (wantGear !== gearShown){ gearShown = wantGear; id("bGear").style.display = wantGear ? "" : "none"; }
   if (toastT > 0){ toastT -= raw; if (toastT <= 0) toast.classList.remove("on"); }
