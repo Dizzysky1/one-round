@@ -80,6 +80,8 @@ merge-by-callsign) and the Duel lobby goes live.
 
 The game is MIT. The plan-view tracer map carries an additional contribution
 notice in-tree — see [`LICENSE-TRACER-MAP`](LICENSE-TRACER-MAP) (© 2026
-Aidiotic). [`LICENSE-FRAME-INDICATOR`](LICENSE-FRAME-INDICATOR) is retained
-for reference; the FRAME timing indicator it covers is not part of this
-version.
+Aidiotic). The Mod Host / ORML integration is covered by
+[`LICENSE-MOD-LAUNCHER`](LICENSE-MOD-LAUNCHER) (attribution; continued
+development allowed). [`LICENSE-FRAME-INDICATOR`](LICENSE-FRAME-INDICATOR)
+is retained for reference; the FRAME timing indicator it covers is not part
+of this version.

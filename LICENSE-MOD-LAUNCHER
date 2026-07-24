@@ -1,0 +1,46 @@
+ONE ROUND Mod Launcher License
+==============================
+
+Copyright (c) 2026 Aidiotic (https://github.com/Aidiotic)
+
+This license covers the ONE ROUND Mod Launcher system, including:
+
+  - the companion mod launcher repository (launcher UI, ORML toolchain,
+    Python SDK, example mods, and related docs);
+  - the Mod Host API (`mod-host.js`, `OneRoundModHost` bindings, and
+    related integration in the game fork);
+  - the ORML specification and syscall ABI as published with this system.
+
+It does not claim copyright over the rest of ONE ROUND authored by others,
+nor over separate contributions covered by LICENSE-TRACER-MAP or
+LICENSE-FRAME-INDICATOR.
+
+Permission is granted to use, copy, distribute, and work on this system —
+including fixes, extensions, ports, and online-mode integration — as part
+of ONE ROUND or compatible forks.
+
+Conditions
+----------
+
+  1. **Attribution** — Published copies and derivatives must credit
+     Aidiotic as the originating author of this Mod Launcher system and
+     retain a copy of or prominent link to this license.
+
+  2. **Compliance on request** — If Aidiotic requests in writing that
+     covered code be omitted from a distribution or changed in a stated
+     way, you must comply within a reasonable period (ordinarily 30 days
+     unless another deadline is given).
+
+  3. **No misattribution** — Do not present this system as solely your
+     own work without acknowledging Aidiotic's authorship.
+
+Unlike LICENSE-TRACER-MAP and LICENSE-FRAME-INDICATOR, modifications and
+continued development do **not** require prior written permission. You may
+improve, extend, and maintain this system for offline and online use,
+subject to attribution and compliance on request.
+
+If you omit this system from a fork entirely, this license does not apply
+to what you leave out. If you include it, keep the credit and honor any
+valid omission or change request from Aidiotic.
+
+Questions and requests: open an issue or contact Aidiotic on GitHub.

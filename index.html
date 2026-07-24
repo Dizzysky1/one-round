@@ -693,6 +693,17 @@
 
 </script>
 <script>
+/* ONE ROUND Mod Launcher — load Mod Host only when ?modHost=1 / ?mods=1
+   so the default standalone play path stays a single self-contained file. */
+(function () {
+  try {
+    var q = new URLSearchParams(location.search);
+    if (q.get("modHost") !== "1" && q.get("mods") !== "1") return;
+  } catch (e) { return; }
+  document.write('<script src="mod-host.js"><\/script>');
+})();
+</script>
+<script>
 (function(){
 "use strict";
 if (!window.THREE){ document.body.innerHTML = "<div style='padding:40px;font:14px monospace'>three.js failed to load. Check your connection and reload.</div>"; return; }
@@ -2018,6 +2029,7 @@ function fire(){
     shot.segE[si] = pathEnergyAt(shot, shot.cum[si-1]);
   S.phase = "fly";
   zoomed = false;
+  if (window.OneRoundModHost) window.OneRoundModHost._emit("fire", { level: S.level });
   hideTracerPreview();
   bulletMesh.visible = true; bulletGlow.visible = true;
   // exactly the collision radius — the model is inscribed in the sweep
@@ -2197,6 +2209,7 @@ function resolveShot(){
   if (S.phase !== "fly") return;
   S.phase = "resolve";
   droneStop();
+  if (window.OneRoundModHost) window.OneRoundModHost._emit("resolve", { level: S.level, alive: countAlive() });
   var left = countAlive();
   var bonus = 0;
   if (left === 0){
@@ -2585,6 +2598,7 @@ function offerUpgrades(){
 
 function openUpgrade(bonus){
   S.phase = "upgrade";
+  if (window.OneRoundModHost) window.OneRoundModHost._emit("upgrade", { level: S.level, bonus: bonus|0 });
   releasePointer();
   var cleared = S.level-1;
   uKick.textContent = "Range " + pad2(cleared) + " cleared" + (bonus ? "  \u00b7  +"+bonus+" bonus" : "");
@@ -4771,7 +4785,14 @@ function tick(){
       }
       e.pos.set(e.group.position.x, 0, e.group.position.z);
     }
-    if (S.stats.tracer && aimReady()){
+    var modHost = window.OneRoundModHost;
+    var modsDrivePreview = modHost && modHost.replaceBuiltins;
+    if (modsDrivePreview){
+      if (++previewTick % 2 === 0){
+        modHost._emit("aim", { phase: S.phase, tracer: !!S.stats.tracer, ready: aimReady() });
+        modHost._emit("frame", { dt: raw });
+      }
+    } else if (S.stats.tracer && aimReady()){
       if (++previewTick % 2 === 0) updatePreview();
     } else { hideTracerPreview(); }
   }
@@ -4854,6 +4875,168 @@ function tick(){
 initPost();
 bootMeta();
 saveGame();
+
+// ---- Mod Host bindings (read-only snapshots + presentation only)
+// ONE ROUND Mod Launcher system © 2026 Aidiotic — LICENSE-MOD-LAUNCHER
+(function bindModHost(){
+  if (!window.OneRoundModHost) return;
+  var _up = new THREE.Vector3(0,0,1);
+  function toV3(p){ return new THREE.Vector3(p.x, p.y, p.z); }
+  function rebuildPath(ser){
+    if (!ser) return null;
+    var pts = [];
+    for (var i=0;i<(ser.pts||[]).length;i++) pts.push(toV3(ser.pts[i]));
+    var events = [];
+    for (var e=0;e<(ser.events||[]).length;e++){
+      var ev = ser.events[e];
+      events.push({
+        type: ev.type, at: ev.at, i: ev.i, head: !!ev.head, armored: !!ev.armored,
+        nb: ev.nb, left: ev.left,
+        p: ev.p ? toV3(ev.p) : null,
+        n: ev.n ? toV3(ev.n) : null
+      });
+    }
+    return {
+      pts: pts, events: events,
+      kills: ser.kills|0, bounces: ser.bounces|0, length: ser.length||0,
+      spareBounce: ser.spareBounce|0
+    };
+  }
+  OneRoundModHost.bind({
+    getPhase: function(){ return S.phase; },
+    getLevel: function(){ return S.level|0; },
+    getStats: function(){ return S.stats; },
+    getPlayerPose: function(){
+      return { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw, pitch: player.pitch };
+    },
+    getEnemies: function(){
+      return enemies.map(function(e){
+        return { x: e.pos.x, z: e.pos.z, alive: e.alive, armored: e.armored, span: e.span||0, axis: !!e.axis };
+      });
+    },
+    getAimRay: function(){
+      return { origin: muzzle(), dir: aimDir() };
+    },
+    getRoom: function(){ return { w: ROOM.w, d: ROOM.d, h: ROOM.h }; },
+    getBlocks: function(){
+      return blocks.map(function(bk){
+        return {
+          kind: bk.kind,
+          min: { x: bk.min.x, y: bk.min.y, z: bk.min.z },
+          max: { x: bk.max.x, y: bk.max.y, z: bk.max.z }
+        };
+      });
+    },
+    previewPath: function(){
+      return solvePath(muzzle(), aimDir(), false);
+    },
+    framePerfect: function(raw){
+      var tight = isFramePerfectAttempt(raw);
+      if (!tight) return false;
+      // serialize keys as object map for mods
+      var out = {};
+      for (var k in tight) if (Object.prototype.hasOwnProperty.call(tight, k)) out[k] = true;
+      return out;
+    },
+    hideTracerPreview: hideTracerPreview,
+    applyPreviewOverlay: function(pv){
+      if (!pv) return false;
+      writePreviewLine(previewGeo, preview, pv.pts, PREVIEW_CAP);
+      writePreviewLine(previewHaloGeo, previewHalo, pv.pts, PREVIEW_CAP);
+      previewHalo.material.opacity = (pv.kills > 0) ? 0.36 : 0.28;
+      hidePreviewDots();
+      var d = 0;
+      for (var e=0;e<pv.events.length && d<previewDots.children.length;e++){
+        var ev = pv.events[e];
+        if (ev.type !== "bounce" && ev.type !== "pad") continue;
+        var ring = previewDots.children[d++];
+        ring.position.copy(ev.p).addScaledVector(ev.n, 0.03);
+        ring.quaternion.setFromUnitVectors(_up, ev.n);
+        ring.material.color.setHex(ev.type === "pad" ? 0xE0912A : 0x1550D8);
+        ring.visible = true;
+      }
+      var k = 0;
+      var tPulse = 0.92 + 0.08 * Math.sin(performance.now() * 0.008);
+      for (var e2=0;e2<pv.events.length && k<previewKills.children.length;e2++){
+        var kv = pv.events[e2];
+        if (kv.type !== "kill") continue;
+        var orb = previewKills.children[k++];
+        orb.position.copy(kv.p);
+        orb.material.color.setHex(kv.head ? 0xFF6A4A : 0xD93B24);
+        orb.scale.setScalar((kv.head ? 1.15 : 1) * tPulse);
+        orb.visible = true;
+      }
+      return true;
+    },
+    setOverlay: function(id, spec){
+      if (!spec) return false;
+      if (spec.pts){
+        var rebuilt = rebuildPath(spec);
+        return this.applyPreviewOverlay(rebuilt);
+      }
+      return false;
+    },
+    clearOverlay: function(){
+      hideTracerPreview();
+      return true;
+    },
+    drawPlanView: function(raw, frameTight){
+      drawMiniMap(raw, frameTight || false);
+      id("miniBox").classList.add("on");
+      return true;
+    },
+    showTracerPanel: function(on){
+      id("miniBox").classList.toggle("on", !!on);
+      if (!on){
+        id("miniBox").classList.remove("frame");
+        id("miniStat").textContent = "\u2014";
+      }
+      return true;
+    },
+    uiSetPanel: function(panelId, spec){
+      if (panelId === "tracer" || panelId === "miniBox"){
+        if (spec && spec.visible === false) return this.showTracerPanel(false);
+        return this.showTracerPanel(true);
+      }
+      return false;
+    },
+    uiClearPanel: function(panelId){
+      if (panelId === "tracer" || panelId === "miniBox") return this.showTracerPanel(false);
+      return false;
+    },
+    setBadge: function(badgeId, text, pulse){
+      if (badgeId === "frame" || badgeId === "FRAME"){
+        var base = id("miniStat").textContent || "";
+        if (text){
+          if (base.indexOf("FRAME") < 0) id("miniStat").textContent = base + (base && base !== "\u2014" ? " \u00b7 " : "") + text;
+          id("miniBox").classList.toggle("frame", !!pulse || !!text);
+        }
+        return true;
+      }
+      var el = id("modBadge");
+      if (!el){
+        el = document.createElement("div");
+        el.id = "modBadge";
+        el.style.cssText = "position:absolute;top:18px;left:50%;transform:translateX(-50%);z-index:8;font:700 11px ui-monospace,monospace;letter-spacing:.2em;padding:6px 12px;background:rgba(245,243,238,.92);border:1px solid #14161A;pointer-events:none";
+        document.querySelector(".hud").appendChild(el);
+      }
+      el.textContent = text || "";
+      el.style.display = text ? "block" : "none";
+      el.style.opacity = pulse ? "1" : "0.85";
+      return true;
+    },
+    clearBadge: function(badgeId){
+      if (badgeId === "frame" || badgeId === "FRAME"){
+        id("miniBox").classList.remove("frame");
+        return true;
+      }
+      var el = id("modBadge");
+      if (el) el.style.display = "none";
+      return true;
+    }
+  });
+})();
+
 tick();
 
 addEventListener("resize", function(){
