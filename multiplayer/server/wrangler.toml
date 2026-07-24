@@ -10,13 +10,11 @@ name = "one-round-net"
 main = "worker.js"
 compatibility_date = "2026-06-01"
 
-# Create the namespace first:
-#   npx wrangler kv namespace create LEADERBOARD
-# then paste the generated id below (and a preview_id for `wrangler dev`).
+# Created with: npx wrangler kv namespace create LEADERBOARD
+# (`wrangler dev` simulates KV locally, so no preview_id is needed.)
 [[kv_namespaces]]
 binding = "LEADERBOARD"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
-# preview_id = "REPLACE_WITH_PREVIEW_ID"
+id = "94712fc6195042a9a251b64f03d846ba"
 
 [durable_objects]
 bindings = [

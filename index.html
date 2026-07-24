@@ -766,7 +766,7 @@ function hyp2(a,b){ return Math.sqrt(a*a + b*b); }
 // ?server=https://<worker-url> (remembered), or window.ONE_ROUND_SERVER.
 // Set DEFAULT_SERVER to "" to ship fully offline (local board, duel lobby
 // explains how to deploy). Deploy steps: multiplayer/server/README.md.
-var DEFAULT_SERVER = "";
+var DEFAULT_SERVER = "https://one-round-net.dizzysky1.workers.dev";
 var NET_BASE = (function(){
   var m = location.search.match(/[?&]server=([^&]+)/);
   var v = m ? decodeURIComponent(m[1]) : "";
