@@ -2413,7 +2413,9 @@ function writePreviewLine(geo, line, pts, cap){
 }
 /* Frame-perfect: this exact fire timing is required. Current preview lands a
    kill that disappears if you fire ~1 frame earlier AND ~1 frame later
-   (enemy patrol phase + your position along movement). */
+   (enemy patrol phase + your position along movement). One frame is the
+   display's measured refresh interval (frameDur), not an assumed 60Hz. */
+var frameDur = 1/60;
 function isFramePerfectAttempt(pvNow){
   if (!pvNow || !(pvNow.kills > 0)) return false;
 
@@ -2424,7 +2426,7 @@ function isFramePerfectAttempt(pvNow){
   var killIds = Object.keys(curKills);
   if (!killIds.length) return false;
 
-  var frameDt = 1/60;
+  var frameDt = frameDur;
   var slowK = 1 - Math.min(0.62, S.stats.chrono * 0.21);
   var savedPlayer = player.pos.clone();
   var saved = [];
@@ -3759,6 +3761,7 @@ player.lastStep = 0;
 function tick(){
   requestAnimationFrame(tick);
   var raw = Math.min(clock.getDelta(), 0.05);
+  if (raw > 0.0005) frameDur += (Math.min(raw, 1/24) - frameDur)*0.08;
 
   var flying = S.phase === "fly" || S.phase === "resolve";
   var wantScale = flying ? SLOWMO*(1-Math.min(0.55, S.stats.chrono*0.17)) : 1;
