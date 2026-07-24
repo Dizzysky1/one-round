@@ -106,6 +106,15 @@
   .rnd em{font-style:normal;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--slate)}
 
   /* range tape */
+  /* duel HUD strip */
+  .dhud{position:absolute;top:44px;left:50%;transform:translateX(-50%);display:none;
+    padding:7px 14px;gap:12px;align-items:baseline;white-space:nowrap}
+  .dhud.on{display:flex}
+  .dhud b{font-size:9px;letter-spacing:.3em;color:var(--signal)}
+  .dhud span{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink)}
+  .dhud em{font-style:normal;font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--slate)}
+  .dhud em.low{color:var(--signal)}
+  body.touch .dhud{top:calc(64px + env(safe-area-inset-top))}
   .tape{position:absolute;top:18px;left:50%;transform:translateX(-50%);display:flex;gap:3px;
     align-items:flex-end;padding:9px 12px;background:var(--panel);border:1px solid var(--hair)}
   .tape i{width:4px;height:9px;background:var(--hair);display:block}
@@ -426,6 +435,9 @@
     </div>
   </div>
   <div class="tape" id="tape"></div>
+  <div class="panel dhud" id="duelHud">
+    <b>DUEL</b><span id="dhRange"></span><span id="dhScore"></span><em id="dhClock"></em>
+  </div>
   <button class="gear" id="bGear">Settings</button>
   <div class="cross" id="cross"><i></i><i></i><i></i><i></i><u></u></div>
   <div class="hm" id="hitmark"><b></b><b></b><b></b><b></b></div>
@@ -484,6 +496,7 @@
     <button class="go" id="bStart">Step to the line</button>
     <button class="go ghost" id="bShop">Armoury</button>
     <button class="go ghost" id="bBoard">Leaderboard</button>
+    <button class="go ghost" id="bDuel">Duel</button>
   </div>
 </div>
 
@@ -583,6 +596,48 @@
   </div>
 </div>
 
+<div class="veil" id="vDuel">
+  <div class="card" style="max-width:560px">
+    <div class="kick">Head to head</div>
+    <h2>Duel<em>.</em></h2>
+    <p class="sub">Best of five ranges &mdash; same seed, same level, one round each.
+      Higher score takes the range. First to three wins. Both sides get the tracer:
+      it is a pure planning contest.</p>
+    <div id="dOffline" style="display:none">
+      <p class="note">No duel server configured. Deploy <b>multiplayer/server</b>
+      (wrangler deploy) and open the game with <b>?server=https://&lt;worker-url&gt;</b>
+      once &mdash; the address is remembered.</p>
+    </div>
+    <div id="dLobby">
+      <div class="cs">
+        <label for="dName">Callsign</label>
+        <input id="dName" maxlength="16" placeholder="RECRUIT" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="go" id="bDuelNew">Create room</button>
+      <div class="cs">
+        <label for="dCode">Room code</label>
+        <input id="dCode" maxlength="4" placeholder="KX7Q" autocomplete="off" spellcheck="false"
+               style="text-transform:uppercase">
+      </div>
+      <button class="go ghost" id="bDuelJoin">Join room</button>
+      <p class="note" id="dNote"></p>
+    </div>
+    <div id="dRoom" style="display:none">
+      <p class="sub">Room <b id="dRoomCode" style="letter-spacing:.3em"></b> &mdash; share the code.</p>
+      <p class="sub" id="dYou"></p>
+      <p class="sub" id="dOpp">Waiting for an opponent&hellip;</p>
+      <button class="go" id="bDuelReady">Ready</button>
+      <p class="note" id="dRoomNote"></p>
+    </div>
+    <div id="dResult" style="display:none">
+      <h2 id="dResultLine" style="margin-top:10px"></h2>
+      <p class="sub" id="dResultSub"></p>
+      <button class="go" id="bDuelRematch">Rematch</button>
+    </div>
+    <button class="go ghost" id="bDuelBack">Back</button>
+  </div>
+</div>
+
 <div class="veil" id="vOpts">
   <div class="card" style="max-width:520px">
     <div class="kick">Range settings</div>
@@ -645,6 +700,54 @@ var BANK_STEP = 0.5, BANK_CAP = 6;
 
 var UP = new THREE.Vector3(0,1,0);
 var reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ------------------------------------------------- netcode determinism
+// Mirrors multiplayer/server/solver.js — do not edit one without the other.
+var _imul = Math.imul || function(a,b){
+  var ah=(a>>>16)&0xffff, al=a&0xffff, bh=(b>>>16)&0xffff, bl=b&0xffff;
+  return ((al*bl)+(((ah*bl+al*bh)<<16)>>>0))|0;
+};
+function mulberry32(a){
+  a = a >>> 0;
+  return function(){
+    a = (a + 0x6D2B79F5) >>> 0;
+    var t = a;
+    t = _imul(t ^ (t >>> 15), t | 1);
+    t = (t + _imul(t ^ (t >>> 7), t | 61)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+// levelgen RNG: solo = Math.random, duels swap in a seeded stream
+var rnd = Math.random;
+function setLevelRng(f){ rnd = f || Math.random; }
+// engine-independent sin/cos (exact float ops only; |err| < 1e-13)
+var _DTAU = Math.PI*2, _DHPI = Math.PI/2;
+var _S3=-1/6,_S5=1/120,_S7=-1/5040,_S9=1/362880,_S11=-1/39916800,
+    _S13=1/6227020800,_S15=-1/1307674368000,_S17=1/355687428096000;
+function dSin(x){
+  x = x - Math.floor(x/_DTAU)*_DTAU;
+  if (x > Math.PI) x = x - _DTAU;
+  if (x > _DHPI) x = Math.PI - x;
+  else if (x < -_DHPI) x = -Math.PI - x;
+  var x2 = x*x;
+  return x*(1 + x2*(_S3 + x2*(_S5 + x2*(_S7 + x2*(_S9 + x2*(_S11 +
+         x2*(_S13 + x2*(_S15 + x2*_S17))))))));
+}
+function dCos(x){ return dSin(x + _DHPI); }
+function hyp2(a,b){ return Math.sqrt(a*a + b*b); }
+// Multiplayer/shared-board server (Cloudflare Worker). Configure once with
+// ?server=https://<worker-url> (remembered), or set window.ONE_ROUND_SERVER.
+// Empty = fully offline: local board, duel lobby explains how to deploy.
+var NET_BASE = (function(){
+  var m = location.search.match(/[?&]server=([^&]+)/);
+  var v = m ? decodeURIComponent(m[1]) : "";
+  try {
+    if (v) localStorage.setItem("oneround:server", v);
+    else v = localStorage.getItem("oneround:server") || "";
+  } catch(e){}
+  if (!v && typeof window.ONE_ROUND_SERVER === "string") v = window.ONE_ROUND_SERVER;
+  return v.replace(/\/+$/,"");
+})();
 
 // ---------------------------------------------------------------- state
 var S = {
@@ -1070,23 +1173,23 @@ function addEnemy(x,z,armored,span,axis,variant){
   }
   g.position.set(x,0,z);
   levelGroup.add(g);
-  enemies.push({ group:g, base:new THREE.Vector2(x,z), axis:axis||(Math.random()<0.5?0:1),
-                 span:span||0, t:Math.random()*6.283,
-                 speed:(0.4+Math.random()*0.45)*(variant==="veteran"?1.7:1),
+  enemies.push({ group:g, base:new THREE.Vector2(x,z), axis:axis||(rnd()<0.5?0:1),
+                 span:span||0, t:rnd()*6.283,
+                 speed:(0.4+rnd()*0.45)*(variant==="veteran"?1.7:1),
                  alive:true, armored:!!armored, variant:variant, spin:spin, beacon:beacon,
                  drumColor: armored ? 0x6E7076 : (variant==="veteran" ? 0x2B2F36 : 0xD93B24),
                  pos:new THREE.Vector3(x,0,z) });
 }
 
 function spotClear(x,z,minPlayer,pad){
-  if (Math.hypot(x-player.pos.x, z-player.pos.z) < minPlayer) return false;
+  if (hyp2(x-player.pos.x, z-player.pos.z) < minPlayer) return false;
   if (Math.abs(x) > ROOM.w/2-1.6 || Math.abs(z) > ROOM.d/2-1.6) return false;
   for (var i=0;i<blocks.length;i++){
     var b = blocks[i];
     if (x > b.min.x-pad && x < b.max.x+pad && z > b.min.z-pad && z < b.max.z+pad) return false;
   }
   for (var j=0;j<enemies.length;j++){
-    if (Math.hypot(x-enemies[j].base.x, z-enemies[j].base.y) < Math.min(3.4, ROOM.w*0.09)) return false;
+    if (hyp2(x-enemies[j].base.x, z-enemies[j].base.y) < Math.min(3.4, ROOM.w*0.09)) return false;
   }
   return true;
 }
@@ -1098,9 +1201,9 @@ function goldenPoints(need){
   var origin = new THREE.Vector3(player.pos.x, EYE, player.pos.z);
   var best = null;
   for (var attempt=0; attempt<120; attempt++){
-    var yaw = Math.random()*Math.PI*2;
-    var pitch = (Math.random()*0.42) - 0.16;
-    var dir = new THREE.Vector3(-Math.sin(yaw)*Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw)*Math.cos(pitch));
+    var yaw = rnd()*Math.PI*2;
+    var pitch = (rnd()*0.42) - 0.16;
+    var dir = new THREE.Vector3(-dSin(yaw)*dCos(pitch), dSin(pitch), -dCos(yaw)*dCos(pitch));
     var path = solvePath(origin, dir, true);
     var picks = [], minStart = Math.min(4.5 + Math.max(0,S.level-1)*2.2, 26);
     for (var k=1;k<path.pts.length && picks.length<need;k++){
@@ -1149,17 +1252,17 @@ function buildLevel(){
     for (tries=0; tries<50; tries++){
       var kind = wanted[w];
       var style = kind !== "solid" ? kind
-                : (function(){ var r0=Math.random();
+                : (function(){ var r0=rnd();
                     if (r0 < 0.34) return "concrete";
                     if (r0 < 0.60) return "crate";
                     if (r0 < 0.82) return "steel";
                     return "bag"; })();
-      var bw = kind==="solid" ? 1.7+Math.random()*4.4 : 1.5+Math.random()*2.2;
-      var bd = kind==="solid" ? 1.7+Math.random()*4.4 : 1.5+Math.random()*2.2;
-      var bh = kind==="solid" ? 1.7+Math.random()*4.8 : 2.4+Math.random()*3.0;
-      var cx = (Math.random()-0.5)*(ROOM.w-8.5);
-      var cz = (Math.random()-0.5)*(ROOM.d-8.5);
-      if (Math.hypot(cx-player.pos.x, cz-player.pos.z) < Math.min(8, Math.max(4.2, ROOM.d*0.2))) continue;
+      var bw = kind==="solid" ? 1.7+rnd()*4.4 : 1.5+rnd()*2.2;
+      var bd = kind==="solid" ? 1.7+rnd()*4.4 : 1.5+rnd()*2.2;
+      var bh = kind==="solid" ? 1.7+rnd()*4.8 : 2.4+rnd()*3.0;
+      var cx = (rnd()-0.5)*(ROOM.w-8.5);
+      var cz = (rnd()-0.5)*(ROOM.d-8.5);
+      if (hyp2(cx-player.pos.x, cz-player.pos.z) < Math.min(8, Math.max(4.2, ROOM.d*0.2))) continue;
       var ok = true;
       for (var k=0;k<blocks.length;k++){
         var b = blocks[k];
@@ -1181,14 +1284,14 @@ function buildLevel(){
   for (var t=0; t<need; t++){
     var pos = spots[t];
     if (!pos) continue;
-    var armored = armorLeft > 0 && Math.random() < 0.55;
+    var armored = armorLeft > 0 && rnd() < 0.55;
     if (armored) armorLeft--;
-    var span = (moveSpan > 0 && Math.random() < 0.55) ? moveSpan*(0.6+Math.random()*0.4) : 0;
+    var span = (moveSpan > 0 && rnd() < 0.55) ? moveSpan*(0.6+rnd()*0.4) : 0;
     var pool = ["drum"];
     if (S.level >= 3) pool.push("spinner");
     if (S.level >= 4) pool.push("beacon");
     if (S.level >= 6) pool.push("veteran","spinner");
-    addEnemy(pos.x, pos.z, armored, span, null, pool[Math.floor(Math.random()*pool.length)]);
+    addEnemy(pos.x, pos.z, armored, span, null, pool[Math.floor(rnd()*pool.length)]);
   }
   buildDressing();
   sun.shadow.needsUpdate = true;
@@ -1483,7 +1586,7 @@ function solvePath(origin, dir, ghost){
         for (var f=0; f<enemies.length; f++){
           var ef = enemies[f];
           if (!ef.alive || down[f]) continue;
-          if (Math.hypot(ef.pos.x-hp.x, ef.pos.z-hp.z) > FRAG_R) continue;
+          if (hyp2(ef.pos.x-hp.x, ef.pos.z-hp.z) > FRAG_R) continue;
           down[f] = true; kills++;
           events.push({ at:dist+0.01, type:"kill", i:f, head:false, p:ef.pos.clone().setY(1.0),
                         nb:nb, armored:ef.armored, frag:true });
@@ -1545,8 +1648,18 @@ function snapshot(){
 
 function fire(){
   if (S.phase !== "aim") return;
+  // duels: one shot per range, none before the countdown ends
+  if (NET.matchLive && (NET.fired || Date.now() < NET.startAt)) return;
   var dir = aimDir();
   shot = solvePath(solveOrigin(), dir, false);
+  if (NET.matchLive && NET.ws && NET.ws.readyState === 1){
+    var ph = [];
+    for (var ei=0; ei<enemies.length; ei++) ph.push(enemies[ei].t);
+    NET.ws.send(JSON.stringify({ type:"shot", range:NET.range,
+      pos:[player.pos.x, player.pos.y, player.pos.z],
+      aim:[dir.x, dir.y, dir.z], ph:ph, stats:S.stats }));
+    NET.fired = true; dhLastSec = -1;
+  }
   shot.travelled = 0; shot.next = 0; shot.seg = 1; shot.snap = snapshot();
   shot.startLevel = S.level;
   S.phase = "fly";
@@ -1698,6 +1811,9 @@ function resolveShot(){
   }
   S.best = Math.max(S.best, S.score);
   refreshHUD();
+  // duels: range flow is server-driven — the verdict then level_start /
+  // round_result messages advance the match, never the local timer
+  if (NET.matchLive) return;
   var lastBonus = bonus;
   setTimeout(function(){
     if (left === 0){ S.level++; openUpgrade(lastBonus); }
@@ -3075,8 +3191,32 @@ function loadGame(){
 // ---------------------------------------------------------- leaderboard
 var BOARD_KEY = "oneround:board:v1", BOARD_MAX = 30;
 var boardCache = null;
+// cloud tier: when a server is configured the board is shared (Worker+KV,
+// merge-by-name server-side); the local Store stays as offline fallback
 function boardLoad(force){
   if (boardCache && !force) return Promise.resolve(boardCache);
+  if (NET_BASE){
+    return fetch(NET_BASE + "/board").then(function(r){ return r.json(); })
+      .then(function(d){
+        boardCache = (d && Array.isArray(d.board)) ? d.board : [];
+        return boardCache;
+      }).catch(function(){ return boardLocalLoad(force); });
+  }
+  return boardLocalLoad(force);
+}
+function boardSubmit(entry){
+  if (NET_BASE){
+    return fetch(NET_BASE + "/score", { method:"POST",
+        headers:{ "Content-Type":"application/json" }, body: JSON.stringify(entry) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        boardCache = (d && Array.isArray(d.board)) ? d.board : [];
+        return boardCache;
+      }).catch(function(){ return boardLocalSubmit(entry); });
+  }
+  return boardLocalSubmit(entry);
+}
+function boardLocalLoad(force){
   return Store.get(BOARD_KEY, Store.canShare).then(function(raw){
     var list = [];
     try { list = raw ? JSON.parse(raw) : []; } catch(e){ list = []; }
@@ -3085,8 +3225,8 @@ function boardLoad(force){
     return list;
   });
 }
-function boardSubmit(entry){
-  return boardLoad(true).then(function(list){
+function boardLocalSubmit(entry){
+  return boardLocalLoad(true).then(function(list){
     var mine = -1;
     for (var i=0;i<list.length;i++) if (list[i].n === entry.n) mine = i;
     if (mine >= 0){
@@ -3262,6 +3402,19 @@ function applyMap(m){
     a[i*3+2] = (Math.random()-0.5)*ROOM.d;
   }
   motes.points.geometry.attributes.position.needsUpdate = true;
+  sun.shadow.needsUpdate = true;
+}
+
+// Build a level both duelists and the server can reproduce bit-for-bit.
+// stats comes straight from the level_start message (canonical duel loadout).
+function buildDuelLevel(seed, mapId, level, stats){
+  S.level = level;
+  S.stats = stats;
+  pendingMap = MAPS[0];
+  for (var i=0;i<MAPS.length;i++) if (MAPS[i].id === mapId) pendingMap = MAPS[i];
+  setLevelRng(mulberry32(seed));
+  try { buildLevel(); }          // pendingMap is set, so pickMap() never runs
+  finally { setLevelRng(null); } // solo play goes back to Math.random
 }
 
 // ======================================================================
@@ -3311,8 +3464,8 @@ function updatePops(dt){
 var backTo = "vStart";
 function showVeil(idv, from){
   if (from) backTo = from;
-  ["vStart","vOver","vShop","vBoard"].forEach(function(v){ id(v).classList.remove("on"); });
-  id(idv).classList.add("on");
+  ["vStart","vOver","vShop","vBoard","vDuel"].forEach(function(v){ id(v).classList.remove("on"); });
+  if (idv) id(idv).classList.add("on");
 }
 function statBar(label, val, max, color){
   var pips = "";
@@ -3413,6 +3566,223 @@ id("csIn").oninput = function(){
   SAVE.callsign = this.value.replace(/[^A-Za-z0-9 _-]/g,"").toUpperCase().slice(0,12);
   this.value = SAVE.callsign;
   saveGame();
+};
+
+// ======================================================================
+//  DUEL (server-authoritative 1v1 — multiplayer/PROTOCOL.md)
+//  The shot is the packet: the server rebuilds the seeded level and
+//  re-solves (pos, aim) itself; its verdict is the score of record.
+// ======================================================================
+var NET = { ws:null, code:null, token:null, slot:-1, matchLive:false,
+            range:0, startAt:0, deadline:0, winsNeeded:3,
+            myWins:0, opWins:0, fired:false, scoreBase:0,
+            opName:"", reconnects:0 };
+var duelHud = id("duelHud"), dhRange = id("dhRange"), dhScore = id("dhScore"),
+    dhClock = id("dhClock");
+
+function duelName(){
+  var n = (SAVE.callsign || id("dName").value || "RECRUIT")
+    .replace(/[^A-Za-z0-9 _.-]/g,"").slice(0,16);
+  return n || "RECRUIT";
+}
+function duelNote(msg){ id("dNote").textContent = msg || ""; }
+function duelReset(){
+  if (NET.ws){ var w = NET.ws; NET.ws = null; try { w.close(); } catch(e){} }
+  NET.code = NET.token = null; NET.slot = -1;
+  NET.matchLive = false; NET.fired = false;
+  NET.range = 0; NET.myWins = NET.opWins = 0; NET.reconnects = 0;
+  duelHud.classList.remove("on");
+  id("dLobby").style.display = ""; id("dRoom").style.display = "none";
+  id("dResult").style.display = "none";
+  id("bDuelReady").disabled = false; id("bDuelReady").textContent = "Ready";
+}
+function openDuel(from){
+  duelReset();
+  showVeil("vDuel", from);
+  id("dName").value = SAVE.callsign || "";
+  var off = !NET_BASE;
+  id("dOffline").style.display = off ? "" : "none";
+  id("dLobby").style.display = off ? "none" : "";
+}
+function wsUrl(code){
+  return NET_BASE.replace(/^http/, "ws") + "/duel/" + code;
+}
+function duelConnect(code){
+  NET.code = code;
+  duelNote("Connecting…");
+  var ws;
+  try { ws = new WebSocket(wsUrl(code)); }
+  catch(e){ duelNote("Could not open a connection."); return; }
+  NET.ws = ws;
+  ws.onopen = function(){
+    if (NET.ws !== ws) return;
+    ws.send(JSON.stringify({ type:"join", name:duelName(),
+                             token:NET.token || undefined }));
+  };
+  ws.onmessage = function(evm){
+    if (NET.ws !== ws) return;
+    var m; try { m = JSON.parse(evm.data); } catch(e){ return; }
+    duelMessage(m);
+  };
+  ws.onclose = function(){
+    if (NET.ws !== ws) return;
+    NET.ws = null;
+    // 60s reconnect grace server-side — keep trying while the match lives
+    if (NET.matchLive && NET.token && NET.reconnects < 40){
+      NET.reconnects++;
+      setStrip("connection lost · rejoining", "hot");
+      setTimeout(function(){ if (!NET.ws && NET.matchLive) duelConnect(NET.code); }, 1500);
+    } else if (id("vDuel").classList.contains("on")){
+      duelNote("Disconnected.");
+      id("dRoom").style.display = "none"; id("dLobby").style.display = "";
+    }
+  };
+}
+function duelMessage(m){
+  if (m.type === "joined"){
+    NET.token = m.token; NET.slot = m.slot; NET.reconnects = 0;
+    id("dLobby").style.display = "none"; id("dRoom").style.display = "";
+    id("dRoomCode").textContent = NET.code;
+    id("dYou").textContent = "You: " + duelName() + (m.you && m.you.ready ? " — ready" : "");
+    duelOpponent(m.opponent);
+    if (m.current){ duelRange(m.current); }
+  } else if (m.type === "opponent_status"){
+    duelOpponent(m.opponent);
+  } else if (m.type === "level_start"){
+    duelRange(m);
+  } else if (m.type === "verdict"){
+    // authoritative: adopt the server's number, not the local replay's
+    S.score = NET.scoreBase + (m.score|0);
+    S.best = Math.max(S.best, S.score);
+    refreshHUD();
+    setStrip(m.cleared ? "range clear · verdict " + m.score
+                       : "verdict " + m.score, m.cleared ? "cool" : "hot");
+  } else if (m.type === "round_result"){
+    duelRound(m);
+  } else if (m.type === "match_result"){
+    duelMatch(m);
+  } else if (m.type === "rematch"){
+    id("dResultSub").textContent = NET.opName + " wants a rematch.";
+  } else if (m.type === "error"){
+    if (m.code === "room_full"){ duelReset(); duelNote("That room is full."); }
+    else if (m.code === "rate"){ /* socket is closing; reconnect path handles it */ }
+    else toastMsg("duel", (m.code || "error").replace(/_/g," "), "#D93B24");
+  }
+}
+function duelOpponent(op){
+  NET.opName = (op && op.name) || "";
+  if (op) NET.opWins = op.wins|0;
+  id("dOpp").textContent = !op ? "Waiting for an opponent…"
+    : op.name + (op.connected === false ? " — connection lost"
+      : op.ready && !NET.matchLive ? " — ready" : "");
+  if (NET.matchLive && op){
+    if (op.fired) toastMsg("opponent", NET.opName + " has fired", "#6B7079");
+    if (op.connected === false) toastMsg("opponent", "connection lost — 60s grace", "#D93B24");
+    duelHudDraw();
+  }
+}
+function duelRange(cur){
+  var first = !NET.matchLive;
+  NET.matchLive = true;
+  NET.range = cur.range; NET.fired = false;
+  NET.startAt = cur.startAt || 0; NET.deadline = cur.deadline || 0;
+  NET.winsNeeded = cur.winsNeeded || 3;
+  if (first){ S.score = 0; S.ranges = 0; S.runKills = 0; S.bestBank = 0; NET.myWins = 0; NET.opWins = 0; }
+  NET.scoreBase = S.score;
+  showVeil(null);
+  buildDuelLevel(cur.seed, cur.mapId, cur.level, cur.stats);
+  resetToAim();
+  duelHud.classList.add("on");
+  duelHudDraw();
+  sfx.ui();
+}
+function duelRound(m){
+  var mine = m.scores ? (m.scores[NET.slot]|0) : 0;
+  var theirs = m.scores ? (m.scores[1-NET.slot]|0) : 0;
+  if (m.wins){ NET.myWins = m.wins[NET.slot]|0; NET.opWins = m.wins[1-NET.slot]|0; }
+  var won = m.winnerSlot === NET.slot, tied = m.winnerSlot === -1 || m.winnerSlot == null;
+  toastMsg(tied ? "range drawn" : won ? "range won" : "range lost",
+           "you " + mine + " · " + (NET.opName || "them") + " " + theirs,
+           tied ? "#6B7079" : won ? "#1550D8" : "#D93B24");
+  if (!NET.fired && mine === 0) setStrip("shot clock expired", "hot");
+  duelHudDraw();
+}
+function duelMatch(m){
+  NET.matchLive = false;
+  duelHud.classList.remove("on");
+  releasePointer();
+  S.phase = "menu";
+  var won = m.winnerSlot === NET.slot, draw = m.winnerSlot === -1 || m.winnerSlot == null;
+  showVeil("vDuel", "vStart");
+  id("dOffline").style.display = "none";
+  id("dLobby").style.display = "none"; id("dRoom").style.display = "none";
+  id("dResult").style.display = "";
+  id("dResultLine").innerHTML = (draw ? "Drawn" : won ? "Duel won" : "Duel lost") + "<em>.</em>";
+  var tot = m.totals ? (m.totals[NET.slot]|0) + " · " + (m.totals[1-NET.slot]|0) : "";
+  id("dResultSub").textContent =
+    (m.reason === "forfeit" ? (won ? (NET.opName||"Opponent") + " forfeited. " : "Forfeit. ") : "") +
+    "Ranges " + NET.myWins + "–" + NET.opWins + (tot ? " · totals " + tot : "");
+  id("bDuelRematch").disabled = false; id("bDuelRematch").textContent = "Rematch";
+  sfx.clear();
+}
+function duelHudDraw(){
+  dhRange.textContent = "RG " + NET.range + "/5";
+  dhScore.textContent = "you " + NET.myWins + " — " + NET.opWins + " " + (NET.opName || "them");
+}
+var dhLastSec = -1;
+function duelHudClock(){
+  if (!NET.matchLive){ return; }
+  var now = Date.now(), txt, low = false;
+  if (now < NET.startAt){
+    txt = "standby " + Math.ceil((NET.startAt - now)/1000);
+  } else if (NET.fired){
+    txt = "await verdict";
+  } else {
+    var s = Math.max(0, Math.ceil((NET.deadline - now)/1000));
+    txt = "0:" + (s < 10 ? "0" : "") + s;
+    if (s > 59) txt = Math.floor(s/60) + ":" + (s%60 < 10 ? "0" : "") + (s%60);
+    low = s <= 10;
+  }
+  if (txt !== dhLastSec){
+    dhLastSec = txt;
+    dhClock.textContent = txt;
+    dhClock.classList.toggle("low", low);
+  }
+}
+id("bDuel").onclick = function(){ ac(); sfx.ui(); openDuel("vStart"); };
+id("bDuelBack").onclick = function(){ sfx.ui(); duelReset(); showVeil(backTo); };
+id("bDuelNew").onclick = function(){
+  if (!NET_BASE) return;
+  sfx.ui(); duelNote("Creating room…");
+  fetch(NET_BASE + "/duel/new", { method:"POST" })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d && d.code) duelConnect(d.code);
+      else duelNote("Could not create a room.");
+    }).catch(function(){ duelNote("Could not reach the duel server."); });
+};
+id("bDuelJoin").onclick = function(){
+  if (!NET_BASE) return;
+  var code = (id("dCode").value || "").toUpperCase().replace(/[^A-Z2-9]/g,"");
+  if (code.length !== 4){ duelNote("Room codes are four characters."); return; }
+  sfx.ui(); duelConnect(code);
+};
+id("bDuelReady").onclick = function(){
+  if (!NET.ws) return;
+  sfx.ui();
+  NET.ws.send(JSON.stringify({ type:"ready" }));
+  this.disabled = true; this.textContent = "Ready — waiting";
+};
+id("bDuelRematch").onclick = function(){
+  if (!NET.ws) return;
+  sfx.ui();
+  NET.ws.send(JSON.stringify({ type:"rematch" }));
+  this.disabled = true; this.textContent = "Waiting for opponent";
+};
+id("dName").oninput = function(){
+  var v = this.value.replace(/[^A-Za-z0-9 _.-]/g,"").toUpperCase().slice(0,16);
+  this.value = v;
+  if (v){ SAVE.callsign = v.slice(0,12); saveGame(); }
 };
 
 function renderMini(list){
@@ -3700,7 +4070,7 @@ function tick(){
       var slowK = 1-Math.min(0.62, S.stats.chrono*0.21);
       if (e.span > 0){
         e.t += raw*e.speed*slowK;
-        var off = Math.sin(e.t)*e.span;
+        var off = dSin(e.t)*e.span;   // the solver reads this position — must match the server
         e.group.position.set(e.base.x + (e.axis?off:0), 0, e.base.y + (e.axis?0:off));
         e.group.rotation.y = Math.sin(e.t*0.8)*0.35;
         sun.shadow.needsUpdate = true;   // a patrolling target moved its shadow
@@ -3776,6 +4146,7 @@ function tick(){
     camera.up.set(0,1,0);
     camera.lookAt(eye.clone().add(aimDir()));
   }
+  duelHudClock();
   if (shake > 0){
     shake -= raw*2.4;
     if (S.opt.shake){

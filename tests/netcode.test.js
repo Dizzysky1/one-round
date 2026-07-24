@@ -325,12 +325,14 @@ var LEVEL_CASES = [
     assert.ok(e >= 0, "end marker not found: " + endMarker);
     return src.slice(s, e + endMarker.length);
   }
-  function subst(code, from, to, expected, what) {
-    var n = code.split(from).length - 1;
+  // index.html now ships the CLIENT_CHANGES substitutions natively (rnd/
+  // hyp2/dSin/dCos), so the extraction runs the REAL shipped code path and
+  // these token counts are the drift alarm.
+  function expectCount(code, token, expected, what) {
+    var n = code.split(token).length - 1;
     assert.strictEqual(n, expected,
-      what + ": expected " + expected + " occurrence(s) of " + from + ", found " + n +
-      " — index.html drifted, update CLIENT_CHANGES.md and this test");
-    return code.split(from).join(to);
+      what + ": expected " + expected + " occurrence(s) of " + token + ", found " + n +
+      " — index.html drifted; keep client and multiplayer/server/solver.js in lockstep");
   }
 
   // ---- slice 1: target/block/pad/sink counts (index.html:664-671)
@@ -340,7 +342,8 @@ var LEVEL_CASES = [
   // ---- slice 2: geometry kernel + solvePath (index.html:1301-1500)
   var solver = slice("function rayAABB(ro, rd, min, max, r){",
                      "spareBounce:Math.max(0,bounces), sparePierce:Math.max(0,pierce) };\n}");
-  solver = subst(solver, "Math.hypot(", "hyp2(", 1, "solver frag radius");   // CLIENT_CHANGES §3
+  expectCount(solver, "hyp2(", 1, "solver frag radius");                     // CLIENT_CHANGES §3
+  expectCount(solver, "Math.hypot(", 0, "solver must not use Math.hypot");
 
   // ---- slice 3: spotClear + goldenPoints + pathDistance + buildLevel
   //      (index.html:1055-1174)
@@ -348,10 +351,14 @@ var LEVEL_CASES = [
                   "buildDressing();\n  sun.shadow.needsUpdate = true;\n  refreshHUD();\n  showBanner();\n}");
   // 15 sites since the off-path fallback-target loop was removed (bug fix:
   // fallback targets broke the every-range-is-clearable guarantee)
-  gen = subst(gen, "Math.random()", "rnd()", 15, "levelgen rng sites");      // CLIENT_CHANGES §2
-  gen = subst(gen, "Math.hypot(", "hyp2(", 3, "levelgen hypot sites");       // CLIENT_CHANGES §3
-  gen = subst(gen, "Math.sin(", "dSin(", 2, "golden dir sin");               // CLIENT_CHANGES §4
-  gen = subst(gen, "Math.cos(", "dCos(", 3, "golden dir cos");               // CLIENT_CHANGES §4
+  expectCount(gen, "rnd()", 15, "levelgen rng sites");                       // CLIENT_CHANGES §2
+  expectCount(gen, "Math.random()", 0, "levelgen must draw from rnd()");
+  expectCount(gen, "hyp2(", 3, "levelgen hypot sites");                      // CLIENT_CHANGES §3
+  expectCount(gen, "Math.hypot(", 0, "levelgen must not use Math.hypot");
+  expectCount(gen, "dSin(", 2, "golden dir sin");                            // CLIENT_CHANGES §4
+  expectCount(gen, "dCos(", 3, "golden dir cos");                            // CLIENT_CHANGES §4
+  expectCount(gen, "Math.sin(", 0, "levelgen must not use Math.sin");
+  expectCount(gen, "Math.cos(", 0, "levelgen must not use Math.cos");
 
   // ---- sandbox: the game globals the slices reach for, with addEnemy /
   //      addBlock stubs that consume rng in the client's exact order
