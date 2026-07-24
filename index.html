@@ -153,7 +153,9 @@
     padding:8px 13px}
   .gear:hover{color:var(--ink);border-color:var(--ink)}
 
-  /* tracer map (earned with Tracer Sight) */
+  /* tracer map (earned with Tracer Sight)
+     Copyright (c) 2026 Aidiotic — see LICENSE-TRACER-MAP.
+     Modifications only by Aidiotic or with prior written permission. */
   .br{bottom:16px;right:16px;padding:10px 11px 11px;opacity:0;transition:opacity .18s;pointer-events:none}
   .br.on{opacity:1}
   .br .cardhead{margin-bottom:7px}
@@ -1215,6 +1217,8 @@ bulletGlow.scale.setScalar(1.5); bulletGlow.visible = false; scene.add(bulletGlo
 
 // The tracer draws through geometry on purpose — a bank shot you cannot see
 // the far half of is not information, it is a guess.
+// Tracer Map contribution © 2026 Aidiotic — LICENSE-TRACER-MAP (modifications
+// only by Aidiotic or with prior written permission).
 var PREVIEW_CAP = 900;
 var previewGeo = new THREE.BufferGeometry();
 previewGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(PREVIEW_CAP*3),3));
@@ -2361,6 +2365,7 @@ updateDiag();
 
 // ======================================================================
 //  PREVIEW (tracer sight)
+//  © 2026 Aidiotic — LICENSE-TRACER-MAP (no third-party rewrites without OK)
 // ======================================================================
 function hidePreviewDots(){
   for (var i=0;i<previewDots.children.length;i++) previewDots.children[i].visible = false;
