@@ -1938,10 +1938,12 @@ var POOL = [
     apply:function(){ S.stats.guide++; } },
   { id:"tracer", name:"Tracer Sight", tag:"one-time",
     desc:"Draws the true ricochet path while you aim, bounce markers and all.",
-    once:true, apply:function(){ S.stats.tracer = true; } },
+    once:true, has:function(){ return S.stats.tracer; },
+    apply:function(){ S.stats.tracer = true; } },
   { id:"scope", name:"Steady Hands", tag:"one-time",
     desc:"Hold right mouse to narrow the view and slow your aim to a crawl.",
-    once:true, apply:function(){ S.stats.scope = true; } },
+    once:true, has:function(){ return S.stats.scope; },
+    apply:function(){ S.stats.scope = true; } },
   { id:"chrono", name:"Chrono Field", tag:"slower everything",
     desc:"Targets patrol lazily and the round's flight stretches out further.",
     apply:function(){ S.stats.chrono++; } },
@@ -1950,10 +1952,12 @@ var POOL = [
     apply:function(){ S.stats.retries++; } },
   { id:"frag", name:"Fragmentation", tag:"one-time",
     desc:"Each kill throws shrapnel. Anything standing within three metres goes down free.",
-    once:true, apply:function(){ S.stats.frag = true; } },
+    once:true, has:function(){ return S.stats.frag; },
+    apply:function(){ S.stats.frag = true; } },
   { id:"bloom", name:"Kinetic Bloom", tag:"one-time",
     desc:"The round swells with every ricochet, so late bounces are far easier to land.",
-    once:true, apply:function(){ S.stats.bloom = true; } },
+    once:true, has:function(){ return S.stats.bloom; },
+    apply:function(){ S.stats.bloom = true; } },
   { id:"pads", name:"Kinetic Pads", tag:"+1 pad per range",
     desc:"The range crew bolts another amber pad to the floor plan. Pad rebounds are free.",
     apply:function(){ S.stats.pads++; } },
@@ -1967,6 +1971,7 @@ function offerUpgrades(){
   var forced = targetsWanted(S.level) > S.stats.pierce;
   var avail = POOL.filter(function(u){
     if (u.once && taken[u.id]) return false;
+    if (u.has && u.has()) return false;
     if (u.ok && !u.ok()) return false;
     return true;
   });

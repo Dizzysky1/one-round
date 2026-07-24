@@ -1,0 +1,12 @@
+{
+  "name": "one-round-tests",
+  "private": true,
+  "description": "Headless test suite for ONE ROUND (jsdom + real three.js, no browser)",
+  "scripts": {
+    "test": "node run.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0",
+    "three": "0.128.0"
+  }
+}
