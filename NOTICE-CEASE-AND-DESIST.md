@@ -60,13 +60,21 @@ Until you comply, **cease** distributing, modifying, and reimplementing my Trace
 
 ---
 
-## 4. Reservation of rights
+## 4. No further merges until resolved
+
+Do **not** merge any pull request or other code into `main` that incorporates, extends, modifies, or builds upon my Tracer Map contribution — including but not limited to **PR #2** — until you have **fully complied** with Section 3 (Option A or Option B).
+
+If you merge any such code before this matter is resolved, that will be treated as **knowing, continued infringement**. By doing so, you understand and accept that I will pursue an immediate **DMCA takedown notice** against the repository and any hosted distribution of ONE ROUND (including GitHub Pages), without further warning.
+
+---
+
+## 5. Reservation of rights
 
 All rights are reserved. Failure to comply may result in further action, including a **DMCA takedown notice** and other remedies available under applicable law.
 
 ---
 
-## 5. Contact
+## 6. Contact
 
 Reply on:
 
