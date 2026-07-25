@@ -5,16 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>ONE ROUND — ricochet range</title>
 <style>
+  /* ---------------------------------------------------------------
+     TACTICAL DARK — an instrument panel, not a page.
+     The token names are unchanged from the print theme on purpose:
+     --ink is "the colour text is drawn in" and --bone is "the colour
+     drawn ON ink", so every existing inversion (.strip, .pick:hover,
+     .seg[data-on]) keeps working when the pair is swapped dark.
+     ------------------------------------------------------------- */
   :root{
-    --bone:#EDEAE3;
-    --paper:#F5F3EE;
-    --panel:rgba(245,243,238,.92);
-    --ink:#14161A;
-    --slate:#6B7079;
-    --hair:rgba(20,22,26,.16);
-    --signal:#D93B24;
-    --volt:#1550D8;
-    --amber:#E0912A;
+    --bone:#05070A;                    /* deepest base — text ON ink   */
+    --paper:#0C1017;                   /* raised surface (cards)       */
+    --panel:rgba(11,15,21,.82);        /* glass HUD panel              */
+    --ink:#DCE5F0;                     /* primary text                 */
+    --slate:#77839A;                   /* secondary text               */
+    --hair:rgba(119,131,154,.24);      /* hairline rules               */
+    --signal:#FF4B33;                  /* kills, danger, live          */
+    --volt:#4B8BFF;                    /* the round's path             */
+    --amber:#FFB446;                   /* kinetic pads, energy         */
+    --phos:#38D98A;                    /* online / connected           */
+    --edge:rgba(75,139,255,.30);       /* lit instrument edge          */
+    --glow:0 0 0 1px rgba(75,139,255,.16), 0 0 22px -6px rgba(75,139,255,.42);
     --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     --sans: "Helvetica Neue", Helvetica, Inter, Arial, sans-serif;
   }
@@ -27,13 +37,22 @@
   canvas#gl{display:block;position:fixed;inset:0}
 
   /* ---- atmosphere ---- */
+  /* deeper vignette than the print theme: the dark scene can take it, and it
+     pulls the eye to the centre of the range */
   .vig{position:fixed;inset:0;pointer-events:none;z-index:3;
-    background:radial-gradient(ellipse 78% 78% at 50% 48%, rgba(20,22,26,0) 42%, rgba(20,22,26,.22) 100%)}
-  .grain{position:fixed;inset:-50%;pointer-events:none;z-index:4;opacity:.30;mix-blend-mode:multiply;
+    background:radial-gradient(ellipse 74% 74% at 50% 48%, rgba(3,5,8,0) 38%, rgba(3,5,8,.55) 100%)}
+  /* multiply grain would only crush an already-dark image — screen it instead,
+     so the noise reads as sensor grain rather than dirt */
+  .grain{position:fixed;inset:-50%;pointer-events:none;z-index:4;opacity:.03;mix-blend-mode:screen;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.55'/></svg>")}
-  .flash{position:fixed;inset:0;pointer-events:none;z-index:6;background:var(--bone);opacity:0;
-    transition:opacity .5s ease-out}
-  .flash.on{opacity:.38;transition:none}
+  /* horizontal scanline wash — the whole UI is a CRT instrument feed */
+  .scan{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:.32;
+    background:repeating-linear-gradient(to bottom,
+      rgba(120,150,200,.045) 0 1px, rgba(0,0,0,0) 1px 3px)}
+  /* the muzzle flash blooms the sensor — warm, not paper-white */
+  .flash{position:fixed;inset:0;pointer-events:none;z-index:6;background:#FFD9A8;opacity:0;
+    transition:opacity .5s ease-out;mix-blend-mode:screen}
+  .flash.on{opacity:.30;transition:none}
 
   /* ricochet-kill chain readout */
   .chain{position:absolute;left:50%;top:24%;transform:translate(-50%,-50%);
@@ -53,8 +72,15 @@
   /* ---- HUD ---- */
   .hud{position:fixed;inset:0;pointer-events:none;z-index:5;
        font-variant-numeric:tabular-nums}
+  /* Instrument panel: glass body, a lit top edge so it reads as powered, and
+     corner ticks drawn with a conic gradient mask (no extra DOM). */
   .panel{position:absolute;background:var(--panel);border:1px solid var(--hair);
-    backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+    backdrop-filter:blur(9px) saturate(1.1);-webkit-backdrop-filter:blur(9px) saturate(1.1);
+    box-shadow:inset 0 1px 0 rgba(150,180,230,.10), 0 8px 30px -14px rgba(0,0,0,.9)}
+  .panel:before{content:"";position:absolute;left:-1px;top:-1px;width:9px;height:9px;
+    border-left:1px solid var(--edge);border-top:1px solid var(--edge);pointer-events:none}
+  .panel:after{content:"";position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;
+    border-right:1px solid var(--edge);border-bottom:1px solid var(--edge);pointer-events:none}
   .tl{top:16px;left:calc(16px + env(safe-area-inset-left));padding:12px 15px 13px}
   .tr{top:16px;right:calc(16px + env(safe-area-inset-right));padding:12px 15px 13px;text-align:right;min-width:132px}
   .bl{bottom:16px;left:16px;padding:11px 14px;min-width:206px;opacity:0;transition:opacity .2s}
@@ -62,7 +88,9 @@
 
   .lab{font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--slate);
        white-space:nowrap}
-  .big{font-size:30px;line-height:.92;font-weight:700;letter-spacing:-.045em;margin-top:3px}
+  /* the two big readouts are the only glowing numerals — everything else stays flat */
+  .big{font-size:30px;line-height:.92;font-weight:700;letter-spacing:-.045em;margin-top:3px;
+    text-shadow:0 0 18px rgba(220,229,240,.28)}
   .big.sc{font-size:26px}
 
   .rows{margin-top:11px;display:grid;gap:6px}
@@ -90,10 +118,15 @@
 
   /* strip */
   .strip{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
-    padding:7px 17px;background:var(--ink);color:var(--bone);
-    font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;white-space:nowrap}
-  .strip.hot{background:var(--signal)}
-  .strip.cool{background:var(--volt)}
+    padding:7px 17px;background:rgba(10,14,20,.88);color:var(--ink);
+    border:1px solid var(--hair);border-left:2px solid var(--slate);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;white-space:nowrap;
+    transition:border-color .18s, color .18s, box-shadow .18s}
+  .strip.hot{border-left-color:var(--signal);color:#FFD8CF;
+    box-shadow:0 0 24px -10px var(--signal)}
+  .strip.cool{border-left-color:var(--volt);color:#CFE0FF;
+    box-shadow:0 0 24px -10px var(--volt)}
 
   /* crosshair */
   .cross{position:absolute;left:50%;top:50%;width:30px;height:30px;transform:translate(-50%,-50%);
@@ -193,12 +226,12 @@
   .tzone{position:fixed;inset:0;z-index:4;touch-action:none;display:none}
   body.touch .tzone{display:block}
   .stick{position:fixed;width:124px;height:124px;margin:-62px 0 0 -62px;border-radius:50%;
-    border:1.5px solid rgba(20,22,26,.35);background:rgba(245,243,238,.28);
+    border:1.5px solid rgba(119,131,154,.42);background:rgba(120,160,220,.10);
     backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
     opacity:0;transition:opacity .14s;pointer-events:none;z-index:6}
   .stick.on{opacity:1}
   .stick u{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;
-    border-radius:50%;background:rgba(20,22,26,.42);border:1.5px solid var(--ink);
+    border-radius:50%;background:rgba(140,175,230,.20);border:1.5px solid var(--ink);
     text-decoration:none}
   .stick i{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;
     border-radius:50%;background:var(--signal)}
@@ -242,7 +275,7 @@
      cost — solid translucent panels on touch instead */
   body.touch .panel,body.touch .mm,body.touch .veil,body.touch .stick{
     backdrop-filter:none;-webkit-backdrop-filter:none}
-  body.touch .panel,body.touch .mm{background:rgba(237,234,227,.93)}
+  body.touch .panel,body.touch .mm{background:rgba(9,12,17,.95)}
   body.touch .log{font-size:8.5px}
   body.touch .pick{min-height:0}
   body.touch .veil{padding:16px}
@@ -250,32 +283,45 @@
 
   /* ---- overlays ---- */
   .veil{position:fixed;inset:0;z-index:10;display:none;place-items:center;
-    background:rgba(237,234,227,.95);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    background:
+      radial-gradient(ellipse 90% 70% at 50% 0%, rgba(75,139,255,.10), rgba(0,0,0,0) 60%),
+      rgba(4,6,9,.93);
+    backdrop-filter:blur(8px) saturate(.8);-webkit-backdrop-filter:blur(8px) saturate(.8);
     padding:22px;overflow:auto;touch-action:manipulation}
   .veil.on{display:grid}
   .card{max-width:900px;width:100%}
-  .kick{font-size:9px;letter-spacing:.32em;text-transform:uppercase;color:var(--slate)}
+  /* kicker gets a lit tick, like a channel marker on a rack unit */
+  .kick{font-size:9px;letter-spacing:.32em;text-transform:uppercase;color:var(--slate);
+    display:flex;align-items:center;gap:9px}
+  .kick:before{content:"";width:16px;height:1px;background:var(--signal);
+    box-shadow:0 0 8px var(--signal);flex:none}
   h1{font-size:clamp(40px,9vw,84px);font-weight:700;letter-spacing:-.055em;line-height:.85;
      margin:12px 0 0}
   h1 em{font-style:normal;color:var(--signal)}
   h2{font-size:clamp(24px,4.4vw,40px);font-weight:700;letter-spacing:-.04em;line-height:.9;margin:10px 0 0}
   h2 em{font-style:normal;color:var(--signal)}
-  .rule{height:1px;background:var(--ink);margin:18px 0}
+  /* a lit rule, brightest at the left where the eye enters */
+  .rule{height:1px;margin:18px 0;
+    background:linear-gradient(90deg, var(--edge), rgba(119,131,154,.16) 45%, rgba(119,131,154,.04))}
   .rule.thin{background:var(--hair)}
-  .body{font-family:var(--sans);font-size:14px;line-height:1.65;color:#4A5058;max-width:60ch}
+  .body{font-family:var(--sans);font-size:14px;line-height:1.65;color:#9AA6B8;max-width:60ch}
   .body b{color:var(--ink);font-weight:600}
   .body + .body{margin-top:10px}
   .keys{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px}
   .keys span{border:1px solid var(--hair);padding:5px 9px;font-size:9px;letter-spacing:.14em;
-    text-transform:uppercase;color:var(--slate)}
+    text-transform:uppercase;color:var(--slate);background:rgba(255,255,255,.02)}
   .keys b{color:var(--ink);font-weight:600}
-  .go{margin-top:22px;background:var(--ink);color:var(--bone);border:0;padding:15px 30px;
+  /* primary action reads as a live switch: lit edge, glow on hover */
+  .go{margin-top:22px;background:linear-gradient(180deg,#EDF3FB,#C3D2E6);color:#05070A;
+    border:0;padding:15px 30px;box-shadow:0 0 30px -12px rgba(190,215,255,.75);
     font-family:var(--mono);font-size:10px;letter-spacing:.28em;text-transform:uppercase;cursor:pointer;
-    transition:background .12s}
-  .go:hover{background:var(--signal)}
+    transition:background .12s, box-shadow .18s, transform .08s}
+  .go:hover{background:var(--signal);color:#fff;box-shadow:0 0 26px -6px var(--signal)}
+  .go:active{transform:translateY(1px)}
   .go:focus-visible{outline:2px solid var(--signal);outline-offset:3px}
   .go.ghost{background:transparent;color:var(--slate);border:1px solid var(--hair);margin-left:8px}
-  .go.ghost:hover{color:var(--ink);border-color:var(--ink);background:transparent}
+  .go.ghost:hover{color:var(--ink);border-color:var(--edge);background:rgba(75,139,255,.07);
+    box-shadow:var(--glow)}
 
   /* hero schematic */
   .hero{border:1px solid var(--ink);background:var(--paper);padding:14px;margin:20px 0 4px}
@@ -294,8 +340,8 @@
   .pdelta{display:flex;align-items:baseline;gap:6px;font-size:12px;font-weight:700;margin-top:9px}
   .pdelta s{text-decoration:none;color:var(--slate);font-weight:400}
   .pdelta u{text-decoration:none;color:var(--volt)}
-  .pick:hover .pdelta u,.pick:focus-visible .pdelta u{color:#8FB0FF}
-  .pick:hover .pdelta s,.pick:focus-visible .pdelta s{color:rgba(237,234,227,.55)}
+  .pick:hover .pdelta u,.pick:focus-visible .pdelta u{color:#1550D8}
+  .pick:hover .pdelta s,.pick:focus-visible .pdelta s{color:rgba(5,7,10,.5)}
   .pick:hover .picon svg,.pick:focus-visible .picon svg{stroke:var(--bone)}
 
   .elev{margin-top:9px;border-top:1px solid var(--hair);padding-top:9px}
@@ -324,13 +370,13 @@
     cursor:pointer;font-family:var(--mono);color:var(--ink);transition:background .1s,color .1s;
     display:flex;flex-direction:column;min-height:132px}
   .pick:hover,.pick:focus-visible{background:var(--ink);color:var(--bone);outline:none}
-  .pick:hover .pd,.pick:focus-visible .pd{color:rgba(237,234,227,.7)}
+  .pick:hover .pd,.pick:focus-visible .pd{color:rgba(5,7,10,.72)}
   .pick:hover .pt2,.pick:focus-visible .pt2{color:var(--bone)}
   .pn{font-size:8.5px;letter-spacing:.2em;color:var(--signal);display:flex;justify-content:space-between}
   .pt2{font-size:14px;font-weight:700;letter-spacing:-.015em;margin:9px 0 6px}
   .pd{font-family:var(--sans);font-size:12px;line-height:1.5;color:var(--slate);flex:1}
   .pfx{font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;margin-top:9px;color:var(--volt)}
-  .pick:hover .pfx{color:#8FB0FF}
+  .pick:hover .pfx{color:#1550D8}
 
   /* shop */
   .credits{display:flex;align-items:baseline;gap:9px;margin-top:6px}
@@ -339,19 +385,24 @@
   .rack{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:11px;margin-top:18px}
   .wcard{border:1px solid var(--hair);background:var(--paper);padding:14px;display:flex;
     flex-direction:column;transition:border-color .12s}
-  .wcard.own{border-color:var(--ink)}
-  .wcard.on{border-color:var(--signal);box-shadow:inset 0 0 0 1px var(--signal)}
+  .wcard.own{border-color:var(--edge)}
+  .wcard.on{border-color:var(--signal);box-shadow:inset 0 0 0 1px var(--signal),
+    0 0 30px -14px var(--signal)}
   .whead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
   .wname{font-size:14px;font-weight:700;letter-spacing:-.01em}
   .wtag{font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--signal)}
   .wdesc{font-family:var(--sans);font-size:11.5px;line-height:1.5;color:var(--slate);margin:8px 0 10px;flex:1}
   .wstat{display:grid;grid-template-columns:56px 1fr;gap:8px;align-items:center;margin-bottom:4px}
   .wstat i{font-style:normal;font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--slate)}
-  .wbuy{margin-top:11px;width:100%;background:var(--ink);color:var(--bone);border:0;padding:10px;
-    font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer}
-  .wbuy:hover{background:var(--signal)}
-  .wbuy[disabled]{background:transparent;color:var(--slate);border:1px solid var(--hair);cursor:default}
-  .wbuy.equipped{background:var(--signal)}
+  .wbuy{margin-top:11px;width:100%;background:linear-gradient(180deg,#EDF3FB,#C3D2E6);color:#05070A;
+    border:0;padding:10px;font-family:var(--mono);font-size:9px;letter-spacing:.2em;
+    text-transform:uppercase;cursor:pointer;transition:box-shadow .16s,background .12s}
+  .wbuy:hover{background:var(--signal);color:#fff;box-shadow:0 0 22px -8px var(--signal)}
+  .wbuy[disabled]{background:transparent;color:var(--slate);border:1px solid var(--hair);
+    cursor:default;box-shadow:none}
+  .wbuy.equipped{background:transparent;color:var(--signal);border:1px solid var(--signal);
+    box-shadow:inset 0 0 22px -12px var(--signal)}
+  .wbuy.equipped:hover{background:transparent;color:var(--signal)}
 
   /* leaderboard */
   .tabs{display:flex;gap:0;margin-top:16px;border-bottom:1px solid var(--hair)}
@@ -362,8 +413,9 @@
   .board{width:100%;border-collapse:collapse;margin-top:4px;font-variant-numeric:tabular-nums}
   .board th{text-align:left;font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--slate);
     font-weight:400;padding:9px 8px;border-bottom:1px solid var(--hair)}
-  .board td{padding:8px;font-size:12px;border-bottom:1px solid rgba(20,22,26,.07)}
-  .board tr.me td{background:rgba(217,59,36,.08);font-weight:700}
+  .board td{padding:8px;font-size:12px;border-bottom:1px solid rgba(119,131,154,.12)}
+  .board tr.me td{background:rgba(255,75,51,.11);font-weight:700;
+    box-shadow:inset 2px 0 0 var(--signal)}
   .board .rk{color:var(--slate);width:34px}
   .board .vv{text-align:right;font-weight:700}
   .board .wc{color:var(--slate);font-size:10px}
@@ -380,7 +432,7 @@
   .opts{display:grid;gap:14px;margin-top:18px;max-width:420px}
   .opt{display:grid;grid-template-columns:1fr auto;align-items:center;gap:14px}
   .opt label{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--slate)}
-  .opt input[type=range]{width:180px;accent-color:#D93B24}
+  .opt input[type=range]{width:180px;accent-color:#FF4B33}
   .tog{border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer;
     font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;padding:6px 12px;min-width:74px}
   .tog[data-on="1"]{background:var(--ink);color:var(--bone)}
@@ -443,10 +495,10 @@
     </div>
     <canvas id="miniMap" width="392" height="392"></canvas>
     <div class="legend">
-      <span><i style="background:#1550D8"></i>Path</span>
-      <span><i style="background:#D93B24"></i>Kill</span>
-      <span><i style="background:#E0912A"></i>Pad</span>
-      <span><i style="background:#14161A"></i>Sink</span>
+      <span><i style="background:#4B8BFF"></i>Path</span>
+      <span><i style="background:#FF4B33"></i>Kill</span>
+      <span><i style="background:#FFB446"></i>Pad</span>
+      <span><i style="background:#5A6273"></i>Sink</span>
     </div>
   </div>
   <div class="tape" id="tape"></div>
@@ -527,10 +579,10 @@
           <div class="cardhead"><div class="lab">Shot plot</div><div class="lab" id="uPlotId">RG-01</div></div>
           <canvas id="uPlot" width="520" height="520"></canvas>
           <div class="legend">
-            <span><i style="background:#1550D8"></i>Path</span>
+            <span><i style="background:#4B8BFF"></i>Path</span>
             <span><i style="background:#D93B24"></i>Target</span>
-            <span><i style="background:#E0912A"></i>Pad</span>
-            <span><i style="background:#14161A"></i>Sink</span>
+            <span><i style="background:#FFB446"></i>Pad</span>
+            <span><i style="background:#5A6273"></i>Sink</span>
           </div>
           <div class="elev"><div class="lab" style="margin-bottom:6px">Elevation · height over distance</div>
             <canvas id="uElev" width="520" height="132"></canvas></div>
@@ -558,7 +610,7 @@
           <div class="cardhead"><div class="lab">Last shot</div><div class="lab" id="oPlotId">RG-01</div></div>
           <canvas id="oPlot" width="520" height="520"></canvas>
           <div class="legend">
-            <span><i style="background:#1550D8"></i>Path</span>
+            <span><i style="background:#4B8BFF"></i>Path</span>
             <span><i style="background:#D93B24"></i>Target</span>
             <span><i style="background:#6B7079"></i>Survived</span>
           </div>
@@ -945,25 +997,25 @@ function makeConcrete(size, base, dark, seams){
 }
 function makeFloor(){
   var s = 512, c = cv(s), g = c.getContext("2d");
-  g.fillStyle = "#DCD7CD"; g.fillRect(0,0,s,s);
-  grain(g,s,s,7000,0.09,"#8C8579");
+  g.fillStyle = "#0F131A"; g.fillRect(0,0,s,s);
+  grain(g,s,s,7000,0.09,"#0B0E13");
   for (var i=0;i<20;i++){
     var x=Math.random()*s, y=Math.random()*s, r=s*(0.05+Math.random()*0.16);
     var gr = g.createRadialGradient(x,y,0,x,y,r);
-    gr.addColorStop(0,"rgba(20,22,26,"+(0.01+Math.random()*0.025)+")");
-    gr.addColorStop(1,"rgba(20,22,26,0)");
+    gr.addColorStop(0,"rgba(150,175,210,"+(0.012+Math.random()*0.03)+")");
+    gr.addColorStop(1,"rgba(150,175,210,0)");
     g.fillStyle=gr; g.beginPath(); g.arc(x,y,r,0,6.2832); g.fill();
   }
   // control-joint grid, painted lane edge
-  g.strokeStyle="rgba(20,22,26,.16)"; g.lineWidth=2;
+  g.strokeStyle="rgba(150,175,210,.14)"; g.lineWidth=2;
   g.beginPath(); g.moveTo(0,0.5); g.lineTo(s,0.5); g.moveTo(0.5,0); g.lineTo(0.5,s); g.stroke();
-  g.strokeStyle="rgba(20,22,26,.05)"; g.lineWidth=1;
+  g.strokeStyle="rgba(150,175,210,.06)"; g.lineWidth=1;
   for (var k=1;k<4;k++){
     g.beginPath(); g.moveTo(0,k*s/4); g.lineTo(s,k*s/4);
     g.moveTo(k*s/4,0); g.lineTo(k*s/4,s); g.stroke();
   }
   // scuffs
-  g.strokeStyle="rgba(20,22,26,.05)";
+  g.strokeStyle="rgba(150,175,210,.055)";
   for (var j=0;j<40;j++){
     g.lineWidth = 0.6+Math.random()*1.6;
     var ax=Math.random()*s, ay=Math.random()*s, an=Math.random()*6.28, len=8+Math.random()*70;
@@ -1200,25 +1252,25 @@ renderer.domElement.addEventListener("webglcontextlost", function(e){
   e.preventDefault();
   var d = document.createElement("div");
   d.style.cssText = "position:fixed;inset:0;z-index:40;display:grid;place-items:center;"+
-    "background:#EDEAE3;color:#14161A;font:12px ui-monospace,monospace;"+
+    "background:#05070A;color:#DCE5F0;font:12px ui-monospace,monospace;"+
     "letter-spacing:.14em;text-transform:uppercase;text-align:center;padding:30px";
   d.innerHTML = "Graphics context lost.<br>Reload to step back to the line.";
   document.body.appendChild(d);
 }, false);
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.06;
+renderer.toneMappingExposure = 0.94;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 maxAniso = renderer.capabilities.getMaxAnisotropy();
 
 var scene = new THREE.Scene();
-scene.background = new THREE.Color(0xEDEAE3);
-scene.fog = new THREE.Fog(0xE4E0D8, 20, 74);
+scene.background = new THREE.Color(0x070A0F);
+scene.fog = new THREE.Fog(0x080B11, 16, 66);
 var camera = new THREE.PerspectiveCamera(74, innerWidth/innerHeight, 0.04, 240);
 
-scene.add(new THREE.HemisphereLight(0xFFFFFF, 0xB6AEA2, 0.78));
-var sun = new THREE.DirectionalLight(0xFFF4E4, 1.35);
+scene.add(new THREE.HemisphereLight(0x6C83A6, 0x070A0F, 0.24));
+var sun = new THREE.DirectionalLight(0xC6DAF2, 0.74);
 sun.position.set(15, 26, 10);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048,2048);
@@ -1229,13 +1281,13 @@ sun.shadow.camera.far=76; sun.shadow.bias=-0.0012; sun.shadow.normalBias=0.02;
 sun.shadow.autoUpdate = false;
 sun.shadow.needsUpdate = true;
 scene.add(sun);
-var fill = new THREE.DirectionalLight(0xD6E2F7, 0.32);
+var fill = new THREE.DirectionalLight(0x4B8BFF, 0.30);
 fill.position.set(-14, 9, -12); scene.add(fill);
 
 // ------------------------------------------------------------ materials
 var texFloor = T(makeFloor(), 11);
-var texWall  = T(makeConcrete(512,"#E9E6DF","#9B948A",true), 7, 2);
-var texBlock = makeConcrete(256,"#CFC9BE","#8B8478",true);
+var texWall  = T(makeConcrete(512,"#20262F","#161B22",true), 7, 2);
+var texBlock = makeConcrete(256,"#2A313B","#1B2028",true);
 var texPad   = makePad(), texSink = makeSink();
 var texDrum  = T(makeDrum(false),1,1), texArm = T(makeDrum(true),1,1);
 var texHead  = T(makeHead(false),1,1), texHeadA = T(makeHead(true),1,1);
@@ -2376,11 +2428,11 @@ function drawElevation(canvas, sh){
   var g = canvas.getContext("2d"), W = canvas.width, H = canvas.height;
   var padL = 26, padR = 10, padT = 10, padB = 16;
   g.clearRect(0,0,W,H);
-  g.fillStyle = "#F5F3EE"; g.fillRect(0,0,W,H);
+  g.fillStyle = "#0B0F15"; g.fillRect(0,0,W,H);
   var L = (sh && sh.length > 1) ? sh.length : 1;
   function X(d){ return padL + (d/L)*(W-padL-padR); }
   function Y(y){ return H-padB - (y/ROOM.h)*(H-padT-padB); }
-  g.strokeStyle = "rgba(20,22,26,.16)"; g.lineWidth = 1;
+  g.strokeStyle = "rgba(150,175,215,.18)"; g.lineWidth = 1;
   g.beginPath(); g.moveTo(padL, Y(0)); g.lineTo(W-padR, Y(0));
   g.moveTo(padL, Y(ROOM.h)); g.lineTo(W-padR, Y(ROOM.h)); g.stroke();
   g.setLineDash([4,4]); g.strokeStyle = "rgba(217,59,36,.45)";
@@ -2392,7 +2444,7 @@ function drawElevation(canvas, sh){
   g.fillText("EYE", padL-4, Y(EYE));
   g.fillText("0", padL-4, Y(0));
   if (sh && sh.pts.length > 1){
-    g.strokeStyle = "#1550D8"; g.lineWidth = 2; g.lineJoin = "round";
+    g.strokeStyle = "#4B8BFF"; g.lineWidth = 2; g.lineJoin = "round";
     g.beginPath();
     var acc = 0;
     g.moveTo(X(0), Y(sh.pts[0].y));
@@ -2403,9 +2455,9 @@ function drawElevation(canvas, sh){
     g.stroke();
     for (var e=0;e<sh.events.length;e++){
       var ev = sh.events[e];
-      var col = ev.type === "kill" ? "#D93B24" : ev.type === "pad" ? "#E0912A"
-              : ev.type === "sink" ? "#14161A" : "#1550D8";
-      if (ev.type === "stop") col = "#6B7079";
+      var col = ev.type === "kill" ? "#FF4B33" : ev.type === "pad" ? "#FFB446"
+              : ev.type === "sink" ? "#DCE5F0" : "#4B8BFF";
+      if (ev.type === "stop") col = "#77839A";
       g.fillStyle = col;
       g.beginPath(); g.arc(X(ev.at), Y(ev.p.y), ev.type === "kill" ? 4.5 : 3.5, 0, 6.2832); g.fill();
     }
@@ -2423,14 +2475,14 @@ function drawPlot(canvas, sh, snap, prog){
   function X(x){ return W/2 + x*sc; }
   function Y(z){ return H/2 + z*sc; }
   g.clearRect(0,0,W,H);
-  g.fillStyle = "#F5F3EE"; g.fillRect(0,0,W,H);
+  g.fillStyle = "#0B0F15"; g.fillRect(0,0,W,H);
   // grid
-  g.strokeStyle = "rgba(20,22,26,.07)"; g.lineWidth = 1;
+  g.strokeStyle = "rgba(150,175,215,.09)"; g.lineWidth = 1;
   for (var i=-4;i<=4;i++){
     g.beginPath(); g.moveTo(X(i*5.5), Y(-ROOM.d/2)); g.lineTo(X(i*5.5), Y(ROOM.d/2));
     g.moveTo(X(-ROOM.w/2), Y(i*5.5)); g.lineTo(X(ROOM.w/2), Y(i*5.5)); g.stroke();
   }
-  g.strokeStyle = "#14161A"; g.lineWidth = 1.5;
+  g.strokeStyle = "#DCE5F0"; g.lineWidth = 1.5;
   g.strokeRect(X(-ROOM.w/2), Y(-ROOM.d/2), ROOM.w*sc, ROOM.d*sc);
   // blocks
   for (var b=0;b<blocks.length;b++){
@@ -2443,7 +2495,7 @@ function drawPlot(canvas, sh, snap, prog){
   }
   // path
   if (sh && sh.pts.length > 1){
-    g.strokeStyle = "#1550D8"; g.lineWidth = 2; g.lineJoin = "round";
+    g.strokeStyle = "#4B8BFF"; g.lineWidth = 2; g.lineJoin = "round";
     g.beginPath(); g.moveTo(X(sh.pts[0].x), Y(sh.pts[0].z));
     for (var p=1;p<sh.pts.length;p++){
       // replay: stroke only up to the travelled distance, splitting the
@@ -2465,14 +2517,14 @@ function drawPlot(canvas, sh, snap, prog){
       if (ev.type!=="bounce" && ev.type!=="pad") continue;
       if (prog < 1 && ev.at > progDist) break;
       num++;
-      g.fillStyle = ev.type==="pad" ? "#E0912A" : "#1550D8";
+      g.fillStyle = ev.type==="pad" ? "#FFB446" : "#4B8BFF";
       g.beginPath(); g.arc(X(ev.p.x), Y(ev.p.z), 5.5, 0, 6.2832); g.fill();
       g.fillStyle = "#F5F3EE"; g.font = "bold 8px ui-monospace, monospace";
       g.textAlign="center"; g.textBaseline="middle";
       g.fillText(String(num), X(ev.p.x), Y(ev.p.z)+0.5);
     }
     // origin
-    g.fillStyle = "#14161A";
+    g.fillStyle = "#DCE5F0";
     g.beginPath(); g.arc(X(sh.pts[0].x), Y(sh.pts[0].z), 4, 0, 6.2832); g.fill();
   }
   // targets — during a replay a kill's X only lands once the line arrives
@@ -2486,10 +2538,10 @@ function drawPlot(canvas, sh, snap, prog){
       if (!live && prog < 1 && killAt[t] !== undefined && killAt[t] > progDist) live = true;
       g.lineWidth = 2;
       if (live){
-        g.strokeStyle = "#6B7079";
+        g.strokeStyle = "#77839A";
         g.beginPath(); g.arc(X(s.x), Y(s.z), 6, 0, 6.2832); g.stroke();
       } else {
-        g.strokeStyle = "#D93B24";
+        g.strokeStyle = "#FF4B33";
         g.beginPath();
         g.moveTo(X(s.x)-5, Y(s.z)-5); g.lineTo(X(s.x)+5, Y(s.z)+5);
         g.moveTo(X(s.x)+5, Y(s.z)-5); g.lineTo(X(s.x)-5, Y(s.z)+5);
@@ -3299,26 +3351,27 @@ function makeSandbag(){
 }
 function makeSign(kind){
   var w=256,h=128,c=cv(w,h),g=c.getContext("2d");
-  g.fillStyle = kind===1 ? "#D93B24" : kind===2 ? "#E0912A" : "#EDEAE3";
+  g.fillStyle = kind===1 ? "#B32718" : kind===2 ? "#C8801E" : "#10151D";
   g.fillRect(0,0,w,h);
-  g.strokeStyle="rgba(20,22,26,.85)"; g.lineWidth=7; g.strokeRect(4,4,w-8,h-8);
-  g.fillStyle = kind===0 ? "#14161A" : "#14161A";
+  g.strokeStyle = kind===0 ? "rgba(150,175,210,.45)" : "rgba(8,10,14,.8)";
+  g.lineWidth=7; g.strokeRect(4,4,w-8,h-8);
+  g.fillStyle = kind===0 ? "#DCE5F0" : "#0A0D12";
   g.font="bold 30px ui-monospace, monospace"; g.textAlign="center";
-  if (kind===1){ g.fillStyle="#EDEAE3"; g.fillText("LIVE FIRE", w/2, 56); g.font="bold 15px ui-monospace, monospace"; g.fillText("EYE + EAR PROTECTION", w/2, 88); }
+  if (kind===1){ g.fillStyle="#FFD9D2"; g.fillText("LIVE FIRE", w/2, 56); g.font="bold 15px ui-monospace, monospace"; g.fillText("EYE + EAR PROTECTION", w/2, 88); }
   else if (kind===2){ g.fillText("RICOCHET", w/2, 56); g.font="bold 15px ui-monospace, monospace"; g.fillText("HAZARD ZONE", w/2, 88); }
   else { g.fillText("ONE ROUND", w/2, 52); g.font="bold 14px ui-monospace, monospace";
          g.fillStyle="#6B7079"; g.fillText("ISSUE \u00b7 FIRE \u00b7 RECOVER", w/2, 86); }
-  grain(g,w,h,900,0.09,"#14161A");
+  grain(g,w,h,900,0.09,"#05070A");
   return c;
 }
 function makeStencil(txt){
   var s=256,c=cv(s),g=c.getContext("2d");
   g.clearRect(0,0,s,s);
-  g.strokeStyle="rgba(20,22,26,.5)"; g.lineWidth=6;
+  g.strokeStyle="rgba(160,185,220,.42)"; g.lineWidth=6;
   g.beginPath(); g.arc(s/2,s/2,s/2-10,0,6.2832); g.stroke();
-  g.setLineDash([12,10]); g.lineWidth=3; g.strokeStyle="rgba(217,59,36,.55)";
+  g.setLineDash([12,10]); g.lineWidth=3; g.strokeStyle="rgba(255,75,51,.62)";
   g.beginPath(); g.arc(s/2,s/2,s/2-26,0,6.2832); g.stroke(); g.setLineDash([]);
-  g.fillStyle="rgba(20,22,26,.55)"; g.font="bold 62px ui-monospace, monospace";
+  g.fillStyle="rgba(160,185,220,.5)"; g.font="bold 62px ui-monospace, monospace";
   g.textAlign="center"; g.textBaseline="middle";
   g.fillText(txt, s/2, s/2+3);
   return c;
@@ -4534,7 +4587,7 @@ function initPost(){
 
     brightMat = new THREE.ShaderMaterial({
       toneMapped:false, depthTest:false, depthWrite:false,
-      uniforms:{ tDiffuse:{value:null}, uThresh:{value:0.70}, uKnee:{value:0.28} },
+      uniforms:{ tDiffuse:{value:null}, uThresh:{value:0.58}, uKnee:{value:0.30} },
       vertexShader:VERT,
       fragmentShader:[
         "uniform sampler2D tDiffuse; uniform float uThresh; uniform float uKnee;",
