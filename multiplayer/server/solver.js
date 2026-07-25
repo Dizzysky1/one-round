@@ -595,16 +595,26 @@ function validateShot(levelData, shot) {
   var x = shot.pos[0], y = shot.pos[1], z = shot.pos[2];
   // movePlayer pins y to EYE (index.html:3658) and clamps x/z to the shell
   // minus the player radius (:3645-3646).
-  if (y !== EYE) return { ok: false, code: "pos_y" };
+  //
+  // These are sanity checks against states an honest client cannot reach, NOT
+  // a bit-exactness contract. They used to be exact (`y !== EYE`) and a single
+  // ulp of drift — 1.620000000000001 — was enough to discard a real player's
+  // shot, which deadlocked the whole range for BOTH players because the server
+  // then never got that slot's result. Tolerances are millimetres: far below
+  // anything that buys an advantage in a room tens of metres across, and far
+  // above float noise.
+  if (Math.abs(y - EYE) > 1e-4) return { ok: false, code: "pos_y" };
   var hx = room.w / 2 - PLAYER_R, hz = room.d / 2 - PLAYER_R;
-  if (Math.abs(x) > hx + 1e-9 || Math.abs(z) > hz + 1e-9) return { ok: false, code: "pos_oob" };
+  if (Math.abs(x) > hx + 1e-3 || Math.abs(z) > hz + 1e-3) return { ok: false, code: "pos_oob" };
   // movePlayer pushes the player out of tall blocks (:3647-3657); a
-  // position strictly inside one is impossible for an honest client.
+  // position strictly inside one is impossible for an honest client. Pressing
+  // flush against cover to line up a bank shot is not — so only reject a
+  // position a clear millimetre inside the block, not one merely touching it.
   for (var i = 0; i < levelData.blocks.length; i++) {
     var b = levelData.blocks[i];
     if (b.max.y < 0.55) continue;
-    if (x > b.min.x - PLAYER_R + 1e-6 && x < b.max.x + PLAYER_R - 1e-6 &&
-        z > b.min.z - PLAYER_R + 1e-6 && z < b.max.z + PLAYER_R - 1e-6) {
+    if (x > b.min.x - PLAYER_R + 1e-3 && x < b.max.x + PLAYER_R - 1e-3 &&
+        z > b.min.z - PLAYER_R + 1e-3 && z < b.max.z + PLAYER_R - 1e-3) {
       return { ok: false, code: "pos_in_block" };
     }
   }

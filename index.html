@@ -4335,6 +4335,20 @@ function duelMessage(m){
   } else if (m.type === "error"){
     if (m.code === "room_full"){ duelReset(); duelNote("That room is full."); }
     else if (m.code === "rate"){ /* socket is closing; reconnect path handles it */ }
+    else if (NET.matchLive && NET.fired && SHOT_REJECTS[m.code]){
+      // The shot was refused, so the server holds NO result for us this range
+      // — and it will not resolve the range until it has one from both sides.
+      // fire() had already burned our single round optimistically, which left
+      // BOTH players waiting on a verdict that could never arrive (only a
+      // disconnect broke it). Hand the round back so the shot can be retaken.
+      NET.fired = false; dhLastSec = -1;
+      S.score = NET.scoreBase;          // drop the local playback's provisional gain
+      refreshHUD();
+      resetToAim();
+      setStrip("shot refused · fire again", "hot");
+      toastMsg("shot refused", (m.code || "error").replace(/_/g," ") +
+               " &middot; take the shot again", "#D93B24");
+    }
     else toastMsg("duel", (m.code || "error").replace(/_/g," "), "#D93B24");
   }
 }
@@ -4350,6 +4364,13 @@ function duelOpponent(op){
     duelHudDraw();
   }
 }
+// Server refusals that mean "we recorded nothing for you this range" — the
+// round is still yours to take. `already_fired` is deliberately NOT here: that
+// one means the server DOES hold a result, so handing the round back would let
+// a player fire twice.
+var SHOT_REJECTS = { bad_shot:1, bad_pos:1, bad_aim:1, pos_y:1, pos_oob:1,
+                     pos_in_block:1, aim_not_unit:1, bad_phases:1,
+                     stats_mismatch:1, wrong_range:1, not_in_range:1, too_early:1 };
 function duelRange(cur){
   var first = !NET.matchLive;
   NET.matchLive = true;
