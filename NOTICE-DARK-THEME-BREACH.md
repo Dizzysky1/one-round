@@ -77,7 +77,7 @@ Until the cure lands, the dark reskin of my contribution remains unauthorized.
 
 ## 5. Timeline
 
-Please reply on the related issue or this pull request and land the Light mode cure within a reasonable period (**ordinarily 14 days** from this notice — on or before **8 August 2026**).
+Please reply on the related issue or this pull request and land the Light mode cure within a reasonable period (**ordinarily 3 days** from this notice — on or before ** 28th of july 2026**).
 
 ---
 
@@ -92,7 +92,7 @@ Reply on:
 
 ## Disclaimer
 
-This document is a formal compliance notice from the copyright holder. It is **not legal advice**.
+This document is a formal compliance notice from the copyright holder. 
 
 ---
 
